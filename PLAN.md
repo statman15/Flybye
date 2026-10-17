@@ -13,14 +13,14 @@ Google Flights' free "any dates" tracking already emails price drops for each ro
 | Area | Decision |
 |---|---|
 | Home airport | **ORD only.** |
-| Flights | 2 adults, economy, **nonstop always** (SerpApi `stops=1`). |
+| Flights | 2 adults, economy, **nonstop always** (SerpApi `stops=1`). A city can override this; **Porto** allows 1 stop (`stops=2`), because ORD has no nonstop. |
 | Trip types | **Weekend:** Fri evening → Sun, 2–10 weeks out. **3-day weekend:** Thu→Sun or Fri→Mon (holiday Mondays need no vacation day), 2–12 weeks out. **Longer:** 5–9 nights, 3 weeks–4 months out. Each type can be switched on or off in config. |
 | Calendar | One **shared Google Calendar**, read through its private iCal link (no Google sign-in). |
 | What blocks a trip | An **AI labels each event** as a blocker or not, once per event, and the label is cached by event UID and updated date. **OmniRoute first, a Gemini key as fallback.** If both fail, the event blocks. Overrides go in `config.yaml` (`overrides: {uid_or_title: block\|ignore}`). The Sunday summary lists new labels so we can check them. |
-| Destinations | **Every nonstop destination from ORD** comes back free with each Explore call (about 50 on a November weekend). Our wish list in `config.yaml` is a score boost and decides which cities can trigger an instant alert, not a search list. **Cities still to send.** |
+| Destinations | **Every nonstop destination from ORD** comes back with each Explore call. The **wish list** in `config.yaml` boosts the score and is the only set of cities that can trigger an instant alert. Add or remove a city by editing that list (in the app from M3). Starting list (2026-10-17): **Denver, Key West, Miami, San Francisco** (all trip types); **Tokyo, Paris, Lisbon, Porto** (longer trips only; Porto allows 1 stop). |
 | Flight data | **SerpApi `google_travel_explore` with exact `outbound_date`/`return_date`** is the sweep: **one call per window** returns every nonstop destination priced on our dates for 2 adults, plus flight time, airline and a hotel price (spike 2026-10-17). `google_flights` is only used to confirm a deal before an instant alert: it gives Google's typical range and the flight times. Travelpayouts was dropped: its data API needs a website, and its cached US fares are thin. Amadeus Self-Service closed 2026-07-17, and Skyscanner and Kiwi are for partners only. |
 | Normal price | Explore has no typical range, so: (1) we store every Explore price in SQLite, and after a few weekly sweeps each route has its own history (median for its trip type and month); (2) before an instant alert, one `google_flights` call gets Google's `typical_price_range` and `price_level`. The spike returned an empty `price_history`, so we don't rely on it. |
-| Budget | **Free tier, 250 searches/month**, with a hard cap of 230 in code. Each free window is re-searched **every week** with one Explore call (roughly 15–25 windows × 4 weeks, about 60–100 a month), plus up to about 20 `google_flights` confirmations. If we hit the cap, nearest windows go first. |
+| Budget | **Free tier, 250 searches/month**, with a hard cap of 230 in code. Each free window is re-searched **every week** with one Explore call. Longer-trip windows get two more, one with `arrival_area_id` Europe (`/m/02j9z`) and one with Asia (`/m/0j0k`), because the default Explore only covers North America. Porto gets a `google_flights` ORD–OPO call with `stops=2`. That's about 140–180 searches a month, including about 20 `google_flights` confirmations. If we hit the cap, nearest windows go first. |
 | Surprise me | Comes for free: the Sunday summary includes the best-scoring non-wish-list city alongside the wish-list picks. |
 | Weather | Open-Meteo. Within 16 days, the real forecast (free for non-commercial use). Further out, typical weather averaged over the last 10 years from the free historical archive, computed once per city per month and cached. |
 | Alerts | **Instant** when a fare is at or below the low end of Google's typical range on a free window, **at most 2 a week**, and never the same trip twice unless it drops another 10%. Otherwise, a **Sunday top 3**. |
@@ -51,7 +51,7 @@ iCal (shared calendar) ──► events ──► AI blocker labels (cached)
 Each one ends with something we both use.
 
 1. **Backend + Home Assistant alerts.**
-   - ✅ **Spike (2026-10-17, `spike/serpapi_spike.py`):** Explore with exact dates returned 50 nonstop destinations, all on our dates, for 2 adults. Nashville came back at $858 in both Explore and `google_flights`. `google_flights` `price_insights` gave `typical_price_range` [390, 740] and `price_level: high`, with an empty `price_history`.
+   - ✅ **Spike (2026-10-17, `spike/serpapi_spike.py`):** Explore with exact dates returned 50 nonstop destinations, all on our dates, for 2 adults. Nashville came back at $858 in both Explore and `google_flights`. `google_flights` `price_insights` gave `typical_price_range` [390, 740] and `price_level: high`, with an empty `price_history`. For a 7-night January trip, the Europe area search found CDG $1,662 and LIS $1,377 nonstop, the Asia search found NRT $2,471 nonstop, and there was no nonstop to Porto. Default Explore returns only the US, Canada, Mexico and the Bahamas.
    - Next: iCal → AI labels → windows, the weekly sweep (a systemd timer, Sunday morning; no web server yet), SQLite, the instant and Sunday alerts through HA, and `deploy/` scripts for LXC 116.
    - Tests: windows (overlaps, holidays, recurring events), the budget cap, alert limits.
    - *Done when:* both phones get a real Sunday summary from our actual calendar and wish list.
@@ -65,5 +65,4 @@ SerpApi key, the private iCal URL, a Home Assistant long-lived token, the OmniRo
 
 ## Open
 
-- The wish list (we'll send the cities).
 - `hotel_price` units (per night or per stay).
