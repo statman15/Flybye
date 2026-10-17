@@ -25,8 +25,9 @@ jobs:
           python-version: "3.12"
       - run: pip install -q "./backend[test]"
       - run: python -m pytest -q backend/tests
-      - run: python -m flybye ${{ inputs.command || 'daily' }}
+      - run: python -m flybye "$CMD"
         env:
+          CMD: ${{ inputs.command || 'daily' }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           ICAL_URL: ${{ secrets.ICAL_URL }}
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
