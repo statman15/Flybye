@@ -1,0 +1,147 @@
+{
+ "best_flights": [
+  {
+   "flights": [
+    {
+     "departure_airport": {
+      "name": "Chicago O'Hare International Airport",
+      "id": "ORD",
+      "time": "2026-11-13 06:59"
+     },
+     "arrival_airport": {
+      "name": "Nashville International Airport",
+      "id": "BNA",
+      "time": "2026-11-13 08:37"
+     },
+     "duration": 98,
+     "airplane": "Airbus A319",
+     "airline": "United",
+     "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/UA.png",
+     "travel_class": "Economy",
+     "flight_number": "UA 1231",
+     "legroom": "30 in",
+     "extensions": [
+      "Average legroom (30 in)",
+      "Wi-Fi for a fee",
+      "In-seat power & USB outlets",
+      "Stream media to your device",
+      "Carbon emissions estimate: 190 kg"
+     ]
+    }
+   ],
+   "total_duration": 98,
+   "carbon_emissions": {
+    "this_flight": 190000,
+    "typical_for_this_route": 193000,
+    "difference_percent": -2
+   },
+   "price": 858,
+   "type": "Round trip",
+   "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/UA.png",
+   "extensions": [
+    "Checked baggage for a fee",
+    "Bag and fare conditions depend on the return flight"
+   ],
+   "departure_token": "WyJDalJJY0dsTlJIbHdOSFkxYmxWQlFqQjFjSGRDUnkwdExTMHRMUzB0TFc5NVlYRXlNa0ZCUVVGQlIzSlVkWGRKVFdkQldVOUJFZ1pWUVRFeU16RWFDd2lDbmdVUUFob0RWVk5FT0J4d2dwNEYiLFtbIk9SRCIsIjIwMjYtMTEtMTMiLCJCTkEiLG51bGwsIlVBIiwiMTIzMSJdXV0="
+  },
+  {
+   "flights": [
+    {
+     "departure_airport": {
+      "name": "Chicago O'Hare International Airport",
+      "id": "ORD",
+      "time": "2026-11-13 06:59"
+     },
+     "arrival_airport": {
+      "name": "Nashville International Airport",
+      "id": "BNA",
+      "time": "2026-11-13 08:40"
+     },
+     "duration": 101,
+     "airplane": "Embraer 175",
+     "airline": "American",
+     "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/AA.png",
+     "travel_class": "Economy",
+     "flight_number": "AA 3973",
+     "legroom": "30 in",
+     "extensions": [
+      "Average legroom (30 in)",
+      "Free Wi-Fi",
+      "In-seat power & USB outlets",
+      "Stream media to your device",
+      "Carbon emissions estimate: 228 kg"
+     ],
+     "plane_and_crew_by": "Envoy Air as American Eagle"
+    }
+   ],
+   "total_duration": 101,
+   "carbon_emissions": {
+    "this_flight": 229000,
+    "typical_for_this_route": 193000,
+    "difference_percent": 19
+   },
+   "price": 858,
+   "type": "Round trip",
+   "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/AA.png",
+   "extensions": [
+    "Checked baggage for a fee",
+    "Bag and fare conditions depend on the return flight"
+   ],
+   "departure_token": "WyJDalJJY0dsTlJIbHdOSFkxYmxWQlFqQjFjSGRDUnkwdExTMHRMUzB0TFc5NVlYRXlNa0ZCUVVGQlIzSlVkWGRKVFdkQldVOUJFZ1pCUVRNNU56TWFDd2lDbmdVUUFob0RWVk5FT0J4d2dwNEYiLFtbIk9SRCIsIjIwMjYtMTEtMTMiLCJCTkEiLG51bGwsIkFBIiwiMzk3MyJdXV0="
+  }
+ ],
+ "other_flights": [
+  {
+   "flights": [
+    {
+     "departure_airport": {
+      "name": "Chicago O'Hare International Airport",
+      "id": "ORD",
+      "time": "2026-11-13 12:23"
+     },
+     "arrival_airport": {
+      "name": "Nashville International Airport",
+      "id": "BNA",
+      "time": "2026-11-13 14:18"
+     },
+     "duration": 115,
+     "airplane": "Embraer 175",
+     "airline": "United",
+     "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/UA.png",
+     "travel_class": "Economy",
+     "flight_number": "UA 5783",
+     "legroom": "31 in",
+     "extensions": [
+      "Average legroom (31 in)",
+      "Free Wi-Fi",
+      "Stream media to your device",
+      "Carbon emissions estimate: 207 kg"
+     ],
+     "plane_and_crew_by": "SkyWest DBA United Express"
+    }
+   ],
+   "total_duration": 115,
+   "carbon_emissions": {
+    "this_flight": 208000,
+    "typical_for_this_route": 193000,
+    "difference_percent": 8
+   },
+   "price": 858,
+   "type": "Round trip",
+   "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/UA.png",
+   "extensions": [
+    "Checked baggage for a fee",
+    "Bag and fare conditions depend on the return flight"
+   ],
+   "departure_token": "WyJDalJJY0dsTlJIbHdOSFkxYmxWQlFqQjFjSGRDUnkwdExTMHRMUzB0TFc5NVlYRXlNa0ZCUVVGQlIzSlVkWGRKVFdkQldVOUJFZ1pWUVRVM09ETWFDd2lDbmdVUUFob0RWVk5FT0J4d2dwNEYiLFtbIk9SRCIsIjIwMjYtMTEtMTMiLCJCTkEiLG51bGwsIlVBIiwiNTc4MyJdXV0="
+  }
+ ],
+ "price_insights": {
+  "lowest_price": 858,
+  "price_level": "high",
+  "typical_price_range": [
+   390,
+   740
+  ]
+ }
+}

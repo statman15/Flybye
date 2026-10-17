@@ -1,0 +1,73 @@
+{
+ "destinations": [
+  {
+   "destination_id": "/m/0f2v0",
+   "name": "Miami",
+   "country": "United States",
+   "destination_airport": {
+    "code": "FLL"
+   },
+   "start_date": "2026-11-13",
+   "end_date": "2026-11-15",
+   "flight_price": 456,
+   "hotel_price": 244,
+   "flight_duration": 183,
+   "number_of_stops": 0,
+   "airline": "American",
+   "airline_code": "AA"
+  },
+  {
+   "destination_id": "/m/02cl1",
+   "name": "Denver",
+   "country": "United States",
+   "destination_airport": {
+    "code": "DEN"
+   },
+   "start_date": "2026-11-13",
+   "end_date": "2026-11-15",
+   "flight_price": 410,
+   "hotel_price": 130,
+   "flight_duration": 176,
+   "number_of_stops": 0,
+   "airline": "Frontier",
+   "airline_code": "F9"
+  },
+  {
+   "destination_id": "/m/05jbn",
+   "name": "Nashville",
+   "country": "United States",
+   "destination_airport": {
+    "code": "BNA"
+   },
+   "start_date": "2026-11-13",
+   "end_date": "2026-11-15",
+   "flight_price": 858,
+   "hotel_price": 180,
+   "flight_duration": 94,
+   "number_of_stops": 0,
+   "airline": "American",
+   "airline_code": "AA"
+  },
+  {
+   "destination_id": "/m/0rj0z",
+   "name": "Fort Lauderdale",
+   "country": "United States",
+   "destination_airport": {
+    "code": "FLL"
+   },
+   "start_date": "2026-11-13",
+   "end_date": "2026-11-15",
+   "flight_price": 456,
+   "hotel_price": 218,
+   "flight_duration": 183,
+   "number_of_stops": 0,
+   "airline": "American",
+   "airline_code": "AA"
+  },
+  {
+   "destination_id": "/m/07ypt",
+   "name": "Victoria",
+   "country": "Canada"
+  }
+ ]
+}

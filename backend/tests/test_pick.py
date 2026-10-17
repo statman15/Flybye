@@ -1,0 +1,146 @@
+import json
+
+import pytest
+import pathlib
+from datetime import date
+
+from flybye import db as dbm
+from flybye import pick, serp
+from flybye.windows import Window
+
+FIX = pathlib.Path(__file__).parent / "fixtures"
+CFG = {
+    "search": {"cap": 230, "adults": 2, "stops": 1, "long_areas": [None, "/m/02j9z", "/m/0j0k"], "confirm_per_run": 2},
+    "alerts": {"deal_ratio": 0.8, "max_instant_per_week": 2, "repeat_drop": 0.9},
+    "score": {"hour_penalty": 2, "wish_bonus": 10, "holiday_bonus": 5},
+    "cities": [{"name": "Denver", "airports": ["DEN"], "trips": ["weekend", "3day", "long"]},
+               {"name": "Miami", "airports": ["MIA", "FLL"], "trips": ["weekend", "3day", "long"]},
+               {"name": "Porto", "airports": ["OPO"], "trips": ["long"], "stops": 2}],
+}
+WE = Window("weekend", date(2026, 11, 13), date(2026, 11, 15), None)
+LONG = Window("long", date(2027, 1, 16), date(2027, 1, 23), None)
+
+
+def row(code="DEN", price=400, window=WE, name="Denver", minutes=176):
+    return {"window_id": window.id, "kind": window.kind, "out": str(window.out), "ret": str(window.ret), "code": code,
+            "name": name, "price": price, "hotel": 150, "minutes": minutes, "airline": "United", "stops": 0,
+            "source": "explore"}
+
+
+# --- budget ---------------------------------------------------------------------------------------------------
+def test_allowance_spreads_what_is_left_over_the_days_left():
+    assert pick.allowance(230, 0, date(2026, 10, 17)) == 15     # 230 // 15 days (17th..31st)
+    assert pick.allowance(230, 230, date(2026, 10, 17)) == 0
+    assert pick.allowance(230, 250, date(2026, 10, 31)) == 0
+
+
+def test_cost_long_window_counts_areas_and_own_stops_cities():
+    assert pick.cost(WE, CFG) == 1
+    assert pick.cost(LONG, CFG) == 4  # 3 areas + Porto
+
+
+def test_choose_never_searched_first_then_oldest_then_nearest():
+    a = Window("weekend", date(2026, 11, 6), date(2026, 11, 8), None)
+    b = Window("weekend", date(2026, 11, 13), date(2026, 11, 15), None)
+    c = Window("weekend", date(2026, 11, 20), date(2026, 11, 22), None)
+    last = {a.id: "2026-10-10", b.id: "2026-10-03"}
+    assert pick.choose([a, b, c], last, 2, CFG) == [c, b]
+
+
+def test_choose_skips_what_does_not_fit_and_takes_cheaper_ones():
+    assert pick.choose([LONG, WE], {}, 2, CFG) == [WE]
+
+
+# --- baseline, deals, alerts -------------------------------------------------------------------------------------
+def test_baseline_needs_four_prices_from_two_windows():
+    w2 = Window("weekend", date(2026, 11, 20), date(2026, 11, 22), None)
+    assert pick.baseline([row(price=p) for p in (300, 400, 500, 600)]) is None
+    assert pick.baseline([row(price=300), row(price=400), row(price=500, window=w2), row(price=900, window=w2)]) == 450
+
+
+def test_deal_candidates_only_wish_cities_cheap_or_unknown_sorted_capped():
+    rows = [row("DEN", 300), row("FLL", 200, name="Miami"), row("BNA", 100, name="Nashville"), row("OPO", 900)]
+    base = {("DEN", "weekend"): 500, ("FLL", "weekend"): 210}
+    got = pick.deal_candidates(rows, base, CFG)
+    assert [r["code"] for r in got] == ["DEN", "OPO"]  # FLL 0.95 not a deal; BNA not on the list; unknown last
+
+
+def test_should_alert_needs_price_at_or_below_typical_low():
+    c = {"lowest": 380, "typical_low": 390}
+    assert pick.should_alert(row(price=400), c, [], date(2026, 10, 17), CFG)
+    assert not pick.should_alert(row(price=400), {"lowest": 395, "typical_low": 390}, [], date(2026, 10, 17), CFG)
+
+
+def test_should_alert_weekly_cap():
+    c = {"lowest": 300, "typical_low": 390}
+    sent = [{"at": "2026-10-12", "code": "X", "out": "a", "ret": "b", "price": 1},
+            {"at": "2026-10-14", "code": "Y", "out": "a", "ret": "b", "price": 1}]
+    assert not pick.should_alert(row(), c, sent, date(2026, 10, 17), CFG)   # same ISO week (Mon 12th..)
+    assert pick.should_alert(row(), c, sent, date(2026, 10, 19), CFG)       # next week
+
+
+def test_should_alert_repeat_needs_ten_percent_drop():
+    sent = [{"at": "2026-10-01", "code": "DEN", "out": "2026-11-13", "ret": "2026-11-15", "price": 340}]
+    assert not pick.should_alert(row(), {"lowest": 320, "typical_low": 390}, sent, date(2026, 10, 17), CFG)
+    assert pick.should_alert(row(), {"lowest": 300, "typical_low": 390}, sent, date(2026, 10, 17), CFG)
+
+
+# --- score and text ----------------------------------------------------------------------------------------------
+def test_score_prefers_cheaper_shorter_wish_and_holiday():
+    hol = Window("3day", date(2026, 11, 26), date(2026, 11, 29), "Thanksgiving")
+    s = pick.score(row(price=400), 500, WE, CFG)
+    assert s == 20 - 2 * 176 / 60 + 10
+    assert pick.score(row(code="BNA", price=400), 500, WE, CFG) == s - 10
+    assert pick.score(row(price=400), 500, hol, CFG) == s + 5
+    assert pick.score(row(price=400), None, WE, CFG) == pytest.approx(s - 20)
+
+
+def test_fmt_row():
+    t = pick.fmt_row(row(price=410), 533, CFG)
+    assert t == "Denver · Fri Nov 13–Sun Nov 15 · $410 for 2 (23% under usual) · 2h56 nonstop · hotel ~$150"
+
+
+def test_summary_top_three_wish_plus_one_surprise():
+    w2 = Window("weekend", date(2026, 11, 20), date(2026, 11, 22), None)
+    rows = [row("DEN", 300), row("DEN", 350, window=w2), row("FLL", 250, name="Miami"),
+            row("BNA", 100, name="Nashville"), row("ATL", 120, name="Atlanta")]
+    title, text = pick.summary(rows, {}, {WE.id: WE, w2.id: w2}, CFG, [{"title": "Dentist", "block": 1, "why": "appt"}])
+    lines = text.splitlines()
+    assert title.startswith("Flybye")
+    assert sum(l.startswith(("Denver", "Miami")) for l in lines) == 3
+    assert any(l.startswith("Surprise: Nashville") for l in lines)
+    assert any("Dentist" in l and "blocks" in l for l in lines)
+
+
+# --- serp parsing (real response shapes from the 2026-10-17 spike) -------------------------------------------------
+def fake_get(name):
+    data = json.loads((FIX / name).read_text())
+    calls = []
+
+    def get(params):
+        calls.append(params)
+        return data
+    return get, calls
+
+
+def test_explore_rows_and_search_logged():
+    db = dbm.connect(":memory:")
+    get, calls = fake_get("explore.json")
+    rows = serp.explore(WE, None, CFG, db, get)
+    assert {r["code"] for r in rows} == {"FLL", "DEN", "BNA"} and len(rows) == 4  # unpriced Victoria dropped
+    den = next(r for r in rows if r["code"] == "DEN")
+    assert den["price"] == 410 and den["window_id"] == WE.id and den["stops"] == 0
+    p = calls[0]
+    assert p["engine"] == "google_travel_explore" and p["outbound_date"] == "2026-11-13" and p["stops"] == 1
+    assert "arrival_area_id" not in p
+    assert db.execute("SELECT count(*) FROM searches").fetchone()[0] == 1
+
+
+def test_flights_cheapest_itinerary_and_confirm():
+    db = dbm.connect(":memory:")
+    get, calls = fake_get("flights.json")
+    r = serp.flights(LONG, ["OPO"], 2, "Porto", CFG, db, get)
+    assert r["price"] == 858 and r["code"] == "OPO" and r["source"] == "flights" and calls[0]["stops"] == 2
+    c = serp.confirm(row("BNA", 858), CFG, db, get)
+    assert c["lowest"] == 858 and c["typical_low"] == 390 and c["typical_high"] == 740
+    assert calls[1]["arrival_id"] == "BNA" and calls[1]["stops"] == 1
