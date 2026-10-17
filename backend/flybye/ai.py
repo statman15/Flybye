@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import sys
 import urllib.request
 from datetime import datetime
 
@@ -33,11 +34,13 @@ def _line(i, e):
 
 def _ask(batch, cfg, chat):
     msg = [{"role": "user", "content": PROMPT + "\n".join(_line(i, e) for i, e in enumerate(batch))}]
+    errors = []
     for p in cfg.get("ai", []):
         try:
             return {a["i"]: a for a in _parse(chat(p, msg))}, p["name"]
-        except Exception:  # provider down or unreadable answer: try the next one
-            continue
+        except Exception as e:  # provider down, key missing or unreadable answer: try the next one
+            errors.append(f"{p['name']}: {e!r}")
+    print(f"AI labels failed, treating {len(batch)} events as busy: {errors}", file=sys.stderr)
     return {}, None
 
 

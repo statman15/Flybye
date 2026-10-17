@@ -1,24 +1,38 @@
 """SerpApi calls. Every call is logged to `searches` so the monthly cap holds."""
 import json
 import os
+import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
 
 
+class Fatal(Exception):
+    """Out of searches or a bad key: stop searching for today."""
+
+
 def http_get(params):
     q = urllib.parse.urlencode({**params, "api_key": os.environ["SERPAPI_KEY"]})
-    with urllib.request.urlopen("https://serpapi.com/search.json?" + q, timeout=120) as r:
-        return json.load(r)
+    try:
+        with urllib.request.urlopen("https://serpapi.com/search.json?" + q, timeout=120) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:  # SerpApi puts the reason in a JSON body (401 bad key, 429 out of searches)
+        return json.load(e)
 
 
 def _call(params, window_id, db, get):
     db.execute("INSERT INTO searches VALUES(?,?,?)", (datetime.now().isoformat(timespec="seconds"), params["engine"], window_id))
     db.commit()
     d = get(params)
-    if "error" in d:
-        raise RuntimeError(f"SerpApi: {d['error']}")
-    return d
+    err = d.get("error")
+    if not err:
+        return d
+    if "hasn't returned any results" in err:
+        return {}
+    if re.search(r"run out|api key|account", err, re.I):
+        raise Fatal(err)
+    raise RuntimeError(f"SerpApi: {err}")
 
 
 def _base(engine, w, cfg, **extra):
@@ -56,9 +70,12 @@ def flights(w, airports, stops, name, cfg, db, get=http_get):
 
 
 def confirm(row, cfg, db, get=http_get):
+    from .pick import city_for
     from .windows import Window
     w = Window(row["kind"], datetime.fromisoformat(row["out"]).date(), datetime.fromisoformat(row["ret"]).date(), None)
-    d = _call({**_base("google_flights", w, cfg), "arrival_id": row["code"]}, w.id, db, get)
+    stops = (city_for(row["code"], cfg) or {}).get("stops", cfg["search"]["stops"])
+    # logged as "<window>|<code>" so it doesn't count as an Explore refresh of the window
+    d = _call({**_base("google_flights", w, cfg), "arrival_id": row["code"], "stops": stops}, f"{w.id}|{row['code']}", db, get)
     pi = d.get("price_insights", {})
     rng = pi.get("typical_price_range") or [None, None]
     first = min(_itins(d), key=lambda x: x["price"], default=None)

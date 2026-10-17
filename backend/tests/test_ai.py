@@ -75,3 +75,9 @@ def test_same_title_recurring_labelled_once():
     chat = FakeChat(['[{"i":0,"block":true,"why":"x"}]'])
     got = label_events([ev("r", "Volleyball"), ev("r", "Volleyball")], db, CFG, chat)
     assert got == {"r|Volleyball": True} and len(chat.calls) == 1
+
+
+def test_all_providers_failing_is_logged(capsys):
+    db = dbm.connect(":memory:")
+    label_events([ev("z", "Thing")], db, CFG, FakeChat([OSError("no key"), OSError("down")]))
+    assert "no key" in capsys.readouterr().err

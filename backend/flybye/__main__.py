@@ -46,19 +46,24 @@ def baselines(db, codes_kinds, before):
     return out
 
 
-def sweep(cfg, db, today, windows, get):
+def sweep(cfg, db, today, windows, get, send):
     last = {r[0]: r[1] for r in db.execute("SELECT window_id, max(at) FROM searches GROUP BY window_id")}
     budget = pick.allowance(cfg["search"]["cap"], used_this_month(db, today), today)
     rows = []
+    calls = []
     for w in pick.choose(windows, last, budget, cfg):
+        calls += [lambda w=w, a=a: serp.explore(w, a, cfg, db, get)
+                  for a in (cfg["search"]["long_areas"] if w.kind == "long" else [None])]
+        calls += [lambda w=w, c=c: [r for r in [serp.flights(w, c["airports"], c["stops"], c["name"], cfg, db, get)] if r]
+                  for c in pick.own_stops_cities(w.kind, cfg)]
+    for call in calls:
         try:
-            for area in cfg["search"]["long_areas"] if w.kind == "long" else [None]:
-                rows += serp.explore(w, area, cfg, db, get)
-            for c in pick.own_stops_cities(w.kind, cfg):
-                r = serp.flights(w, c["airports"], c["stops"], c["name"], cfg, db, get)
-                rows += [r] if r else []
-        except Exception as e:  # one bad search (quota, timeout) shouldn't lose the rest
-            print(f"search failed for {w.id}: {e}", file=sys.stderr)
+            rows += call()
+        except serp.Fatal as e:
+            send("Flybye stopped searching", f"SerpApi says: {e}")
+            break
+        except Exception as e:  # one bad search (timeout, odd answer) shouldn't lose the rest
+            print(f"search failed: {e}", file=sys.stderr)
     cheapest = {}
     for r in rows:  # Explore can list one airport twice (Miami and Fort Lauderdale are both FLL)
         k = (r["window_id"], r["code"])
@@ -74,10 +79,16 @@ def sweep(cfg, db, today, windows, get):
 def instant_alerts(cfg, db, today, rows, get, send):
     base = baselines(db, {(r["code"], r["kind"]) for r in rows}, str(today))
     sent = [dict(r) for r in db.execute("SELECT * FROM alerts")]
-    for r in pick.deal_candidates(rows, base, cfg):
-        if used_this_month(db, today) >= cfg["search"]["cap"]:
+    week_ago = (today - timedelta(days=7)).isoformat()
+    recent = {r[0] for r in db.execute("SELECT window_id FROM searches WHERE engine='google_flights' AND at >= ?", (week_ago,))}
+    for r in pick.deal_candidates(rows, base, cfg, recent):
+        if used_this_month(db, today) >= cfg["search"]["cap"] or pick.week_full(sent, today, cfg):
             return
-        c = serp.confirm(r, cfg, db, get)
+        try:
+            c = serp.confirm(r, cfg, db, get)
+        except Exception as e:
+            print(f"confirm failed for {r['code']} {r['window_id']}: {e}", file=sys.stderr)
+            continue
         if pick.should_alert(r, c, sent, today, cfg):
             r = {**r, "price": c["lowest"] or r["price"]}
             msg = (pick.fmt_row(r, base.get((r["code"], r["kind"])), cfg)
@@ -93,7 +104,8 @@ def summary(cfg, db, today, windows, send):
     ids = {w.id: w for w in windows}
     rows = [dict(r) for r in db.execute(
         "SELECT p.* FROM prices p JOIN (SELECT window_id, code, max(seen) s FROM prices GROUP BY window_id, code) m "
-        "ON p.window_id = m.window_id AND p.code = m.code AND p.seen = m.s") if r["window_id"] in ids]
+        "ON p.window_id = m.window_id AND p.code = m.code AND p.seen = m.s WHERE p.seen >= ?",
+        ((today - timedelta(days=21)).isoformat(),)) if r["window_id"] in ids]
     base = baselines(db, {(r["code"], r["kind"]) for r in rows}, "9999")
     since = dbm.get(db, "last_summary", "")
     labels = [dict(r) for r in db.execute("SELECT title, block, why FROM labels WHERE at > ? ORDER BY at", (since,))]
@@ -103,8 +115,11 @@ def summary(cfg, db, today, windows, send):
 
 def daily(cfg, db, today, fetch=cal.fetch, chat=ai.http_chat, get=serp.http_get, send=ntfy):
     windows = free_windows(cfg, db, today, fetch, chat)
-    rows = sweep(cfg, db, today, windows, get)
-    instant_alerts(cfg, db, today, rows, get, send)
+    rows = sweep(cfg, db, today, windows, get, send)
+    try:
+        instant_alerts(cfg, db, today, rows, get, send)
+    except Exception as e:  # never let an alert problem cost us the Sunday summary
+        print(f"alerts failed: {e}", file=sys.stderr)
     if today.weekday() == 6:
         summary(cfg, db, today, windows, send)
 

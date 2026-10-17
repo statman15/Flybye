@@ -11,7 +11,7 @@ One time, in this order. Nothing runs on the homelab.
 | `NTFY_TOPIC` | Make one up, long and random, e.g. `flybye-` plus 24 random letters. Anyone who knows it can read the alerts. |
 
 ## 2. Private GitHub repo
-1. Create a **private** repo and push this folder. Its data shows when you're away, so it must stay private.
+1. Create a **private** repo and push this folder to `main` (scheduled runs only fire on the default branch). It must stay private: `data/flybye.db` holds the AI's labels with your event titles, and the Actions log of a `windows` run lists them too.
 2. Repo → Settings → Secrets and variables → Actions → add the 4 secrets above.
 3. Actions → **Daily sweep** → Run workflow with `test-notify` → both phones should get "Flybye test".
 4. Run it with `windows` to check the free dates and the AI's calendar labels in the log, then with `daily`.

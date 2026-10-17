@@ -38,4 +38,6 @@ jobs:
           git add -f data/flybye.db 2>/dev/null || exit 0
           git diff --cached --quiet && exit 0
           git -c user.name=flybye -c user.email=flybye@users.noreply.github.com commit -q -m "data: $(date -u +%F)"
-          git push
+          # someone may have pushed (a config edit) during the run: replay our commit on top, keeping our database
+          for i in 1 2 3; do git push -q && exit 0; git pull -q --rebase -X theirs; done
+          exit 1

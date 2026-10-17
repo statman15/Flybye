@@ -40,25 +40,28 @@ def baseline(rows):
     return statistics.median(r["price"] for r in rows)
 
 
-def deal_candidates(rows, baselines, cfg):
+def deal_candidates(rows, baselines, cfg, recent=()):
+    """recent: "<window_id>|<code>" pairs already confirmed lately, not worth another search yet."""
     out = []
     for r in rows:
-        if not city_for(r["code"], cfg):
+        if not city_for(r["code"], cfg) or f"{r['window_id']}|{r['code']}" in recent:
             continue
         b = baselines.get((r["code"], r["kind"]))
         ratio = r["price"] / b if b else 1.0  # unknown baseline: worth a check, after the real deals
         if b is None or ratio <= cfg["alerts"]["deal_ratio"]:
             out.append((ratio, r))
-    out.sort(key=lambda x: x[0])
+    out.sort(key=lambda x: (x[0], x[1]["price"]))
     return [r for _, r in out[:cfg["search"]["confirm_per_run"]]]
+
+
+def week_full(sent, today, cfg):
+    week = today.isocalendar()[:2]
+    return sum(date.fromisoformat(a["at"][:10]).isocalendar()[:2] == week for a in sent) >= cfg["alerts"]["max_instant_per_week"]
 
 
 def should_alert(row, confirm, sent, today, cfg):
     price = confirm.get("lowest") or row["price"]
-    if not confirm.get("typical_low") or price > confirm["typical_low"]:
-        return False
-    week = today.isocalendar()[:2]
-    if sum(date.fromisoformat(a["at"][:10]).isocalendar()[:2] == week for a in sent) >= cfg["alerts"]["max_instant_per_week"]:
+    if not confirm.get("typical_low") or price > confirm["typical_low"] or week_full(sent, today, cfg):
         return False
     before = [a["price"] for a in sent if (a["code"], a["out"], a["ret"]) == (row["code"], row["out"], row["ret"])]
     return not before or price <= cfg["alerts"]["repeat_drop"] * min(before)
@@ -97,6 +100,7 @@ def summary(rows, baselines, windows, cfg, new_labels):
         lines.append("Surprise: " + fmt_row(other, baselines.get((other["code"], other["kind"])), cfg))
     if not lines:
         lines.append("No priced trips fit your free dates yet.")
-    for l in new_labels:
-        lines.append(f"Calendar: \"{l['title']}\" {'blocks' if l['block'] else 'does not block'} trips ({l['why']})")
+    if new_labels:  # counts only: event titles never go through ntfy
+        n, b = len(new_labels), sum(bool(l["block"]) for l in new_labels)
+        lines.append(f"{n} new calendar event{'s' if n != 1 else ''} checked, {b} block trips (details: run 'windows').")
     return "Flybye: this week's best getaways", "\n".join(lines)

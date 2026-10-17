@@ -69,9 +69,9 @@ def test_sunday_sends_summary_and_new_labels():
     db, f = dbm.connect(":memory:"), Fakes()
     run(date(2026, 10, 18), f, db)
     title, msg, _ = f.sent[-1]
-    assert title.startswith("Flybye: this week") and "Work offsite" in msg
+    assert title.startswith("Flybye: this week") and "1 new calendar event" in msg
     run(date(2026, 10, 25), f, db)
-    assert "Work offsite" not in f.sent[-1][1]                  # labels only listed once
+    assert "new calendar event" not in f.sent[-1][1]            # labels only counted once
 
 
 def test_monthly_cap_stops_searches():
@@ -80,3 +80,52 @@ def test_monthly_cap_stops_searches():
         db.execute("INSERT INTO searches VALUES('2026-10-02T00:00:00','x','y')")
     run(date(2026, 10, 17), f, db)
     assert f.params == []
+
+
+# --- review fixes ------------------------------------------------------------------------------------------------
+def test_confirm_failure_does_not_skip_sunday_summary():
+    db, f = dbm.connect(":memory:"), Fakes(lowest=350)
+
+    def get(p):
+        if p["engine"] == "google_flights" and "arrival_id" in p and p["arrival_id"] != "OPO":
+            raise RuntimeError("SerpApi: timeout")
+        return f.get(p)
+    main.daily(CFG, db, date(2026, 10, 18), fetch=lambda url: ICS, chat=f.chat, get=get, send=f.send)
+    assert f.sent and f.sent[-1][0].startswith("Flybye: this week")
+
+
+def test_quota_error_stops_the_sweep_and_tells_us():
+    db, f = dbm.connect(":memory:"), Fakes()
+
+    def get(p):
+        f.params.append(p)
+        return {"error": "Your account has run out of searches."}
+    main.daily(CFG, db, date(2026, 10, 17), fetch=lambda url: ICS, chat=f.chat, get=get, send=f.send)
+    assert len(f.params) == 1
+    assert any("out of searches" in m for _, m, _ in f.sent)
+
+
+def test_weekly_cap_checked_before_spending_a_confirm():
+    db, f = dbm.connect(":memory:"), Fakes(lowest=350)
+    for d in ("2026-10-12", "2026-10-13"):
+        db.execute("INSERT INTO alerts VALUES(?, 'X', 'a', 'b', 1, 'weekend')", (d,))
+    run(date(2026, 10, 17), f, db)
+    assert not [p for p in f.params if p["engine"] == "google_flights" and p.get("arrival_id") != "OPO"]
+
+
+def test_summary_sends_label_counts_not_titles():
+    db, f = dbm.connect(":memory:"), Fakes()
+    run(date(2026, 10, 18), f, db)
+    msg = f.sent[-1][1]
+    assert "Work offsite" not in msg and "1 new calendar event" in msg
+
+
+def test_summary_ignores_prices_older_than_three_weeks():
+    db, f = dbm.connect(":memory:"), Fakes()
+    run(date(2026, 10, 18), f, db)
+    db.execute("UPDATE prices SET seen='2026-09-01'")
+    f.sent.clear()
+    f.explore = {"destinations": []}
+    f.flights = {"best_flights": [], "other_flights": [], "price_insights": {}}
+    run(date(2026, 10, 25), f, db)
+    assert "No priced trips" in f.sent[-1][1]

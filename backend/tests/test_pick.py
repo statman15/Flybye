@@ -109,7 +109,7 @@ def test_summary_top_three_wish_plus_one_surprise():
     assert title.startswith("Flybye")
     assert sum(l.startswith(("Denver", "Miami")) for l in lines) == 3
     assert any(l.startswith("Surprise: Nashville") for l in lines)
-    assert any("Dentist" in l and "blocks" in l for l in lines)
+    assert "1 new calendar event checked, 1 block trips" in text and "Dentist" not in text
 
 
 # --- serp parsing (real response shapes from the 2026-10-17 spike) -------------------------------------------------
@@ -144,3 +144,28 @@ def test_flights_cheapest_itinerary_and_confirm():
     c = serp.confirm(row("BNA", 858), CFG, db, get)
     assert c["lowest"] == 858 and c["typical_low"] == 390 and c["typical_high"] == 740
     assert calls[1]["arrival_id"] == "BNA" and calls[1]["stops"] == 1
+
+
+def test_confirm_uses_the_city_stops_rule():
+    db = dbm.connect(":memory:")
+    get, calls = fake_get("flights.json")
+    serp.confirm(row("OPO", 900, window=LONG), CFG, db, get)
+    assert calls[0]["stops"] == 2
+
+
+def test_no_results_error_means_empty_not_failure():
+    db = dbm.connect(":memory:")
+    rows = serp.explore(LONG, "/m/02j9z", CFG, db, lambda p: {"error": "Google Travel Explore hasn't returned any results for this query."})
+    assert rows == []
+
+
+def test_quota_error_is_fatal():
+    db = dbm.connect(":memory:")
+    with pytest.raises(serp.Fatal):
+        serp.explore(WE, None, CFG, db, lambda p: {"error": "Invalid API key. Your API key should be here"})
+
+
+def test_unknown_baselines_cheapest_first_and_recently_confirmed_skipped():
+    rows = [row("DEN", 500), row("FLL", 300, name="Miami"), row("DEN", 200, window=LONG)]
+    got = pick.deal_candidates(rows, {}, CFG, recent={f"{LONG.id}|DEN"})
+    assert [(r["code"], r["price"]) for r in got] == [("FLL", 300), ("DEN", 500)]
