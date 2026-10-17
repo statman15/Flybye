@@ -1,10 +1,12 @@
-"""Ask an AI which calendar events really stop us leaving town. Cached per event; config overrides win."""
+"""Ask an AI which calendar events really stop us leaving town. Cached per event; the app's override wins."""
 import json
 import os
 import re
 import sys
 import urllib.request
 from datetime import datetime
+
+from .store import blocks
 
 PROMPT = """These are events from Chris and Laura's shared calendar. For each one, decide whether it means they \
 can't be away on a trip at that time (block=true): work commitments, travel, appointments, events they'd attend, \
@@ -44,31 +46,30 @@ def _ask(batch, cfg, chat):
     return {}, None
 
 
-def label_events(events, db, cfg, chat=http_chat):
-    over = {k.lower(): v == "block" for k, v in cfg.get("overrides", {}).items()}
-    out, todo = {}, {}
+def label_events(events, st, cfg, chat=http_chat):
+    first = {}  # one label per "<uid>|<title>", dated by its next occurrence
     for e in events:
-        key = f"{e.uid}|{e.title}"
-        if key in out or key in todo:
-            continue
-        o = over.get(e.uid.lower(), over.get(e.title.lower()))
-        row = db.execute("SELECT block FROM labels WHERE key=?", (key,)).fetchone()
-        if o is not None:
-            out[key] = o
-        elif row:
-            out[key] = bool(row["block"])
+        k = f"{e.uid}|{e.title}"
+        if k not in first or e.start < first[k].start:
+            first[k] = e
+    have = st.labels_get(list(first))
+    out, todo = {}, []
+    for key, e in first.items():
+        if key in have:
+            out[key] = blocks(have[key])  # the app's override beats the AI
+            if have[key].get("start") != e.start.isoformat():
+                st.labels_put(key, {"start": e.start.isoformat()})
         else:
-            todo[key] = e
-    items = list(todo.items())
+            todo.append((key, e))
     now = datetime.now().isoformat(timespec="seconds")
-    for n in range(0, len(items), 40):
-        batch = items[n:n + 40]
+    for n in range(0, len(todo), 40):
+        batch = todo[n:n + 40]
         answers, src = _ask([e for _, e in batch], cfg, chat)
         for i, (key, e) in enumerate(batch):
             a = answers.get(i)
             out[key] = bool(a["block"]) if a else True  # no answer: assume busy, ask again next run
             if a:
-                db.execute("INSERT OR REPLACE INTO labels VALUES(?,?,?,?,?,?)",
-                           (key, e.title, int(bool(a["block"])), str(a.get("why", "")), src, now))
-    db.commit()
+                st.labels_put(key, {"title": e.title, "start": e.start.isoformat(), "all_day": e.all_day,
+                                    "block": bool(a["block"]), "why": str(a.get("why", "")), "src": src, "at": now,
+                                    "override": None})
     return out

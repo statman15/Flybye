@@ -1,4 +1,4 @@
-"""SerpApi calls. Every call is logged to `searches` so the monthly cap holds."""
+"""SerpApi calls. Every call is logged in the store so the monthly cap holds."""
 import json
 import os
 import re
@@ -21,9 +21,8 @@ def http_get(params):
         return json.load(e)
 
 
-def _call(params, window_id, db, get):
-    db.execute("INSERT INTO searches VALUES(?,?,?)", (datetime.now().isoformat(timespec="seconds"), params["engine"], window_id))
-    db.commit()
+def _call(params, window_id, st, get):
+    st.log_search(window_id)
     d = get(params)
     err = d.get("error")
     if not err:
@@ -46,11 +45,11 @@ def _row(w, code, name, price, hotel, minutes, airline, stops, source):
             "price": price, "hotel": hotel, "minutes": minutes, "airline": airline, "stops": stops, "source": source}
 
 
-def explore(w, area, cfg, db, get=http_get):
+def explore(w, area, cfg, st, get=http_get):
     p = _base("google_travel_explore", w, cfg, travel_mode=1)
     if area:
         p["arrival_area_id"] = area
-    d = _call(p, w.id, db, get)
+    d = _call(p, w.id, st, get)
     return [_row(w, x["destination_airport"]["code"], x["name"], x["flight_price"], x.get("hotel_price"),
                  x.get("flight_duration", 0), x.get("airline"), x.get("number_of_stops", 0), "explore")
             for x in d.get("destinations", []) if x.get("flight_price") and x.get("destination_airport")]
@@ -60,8 +59,8 @@ def _itins(d):
     return d.get("best_flights", []) + d.get("other_flights", [])
 
 
-def flights(w, airports, stops, name, cfg, db, get=http_get):
-    d = _call({**_base("google_flights", w, cfg), "arrival_id": ",".join(airports), "stops": stops}, w.id, db, get)
+def flights(w, airports, stops, name, cfg, st, get=http_get):
+    d = _call({**_base("google_flights", w, cfg), "arrival_id": ",".join(airports), "stops": stops}, w.id, st, get)
     best = min(_itins(d), key=lambda x: x["price"], default=None)
     if not best:
         return None
@@ -69,13 +68,13 @@ def flights(w, airports, stops, name, cfg, db, get=http_get):
                 best["flights"][0]["airline"], len(best.get("layovers", [])), "flights")
 
 
-def confirm(row, cfg, db, get=http_get):
+def confirm(row, cfg, st, get=http_get):
     from .pick import city_for
     from .windows import Window
     w = Window(row["kind"], datetime.fromisoformat(row["out"]).date(), datetime.fromisoformat(row["ret"]).date(), None)
     stops = (city_for(row["code"], cfg) or {}).get("stops", cfg["search"]["stops"])
     # logged as "<window>|<code>" so it doesn't count as an Explore refresh of the window
-    d = _call({**_base("google_flights", w, cfg), "arrival_id": row["code"], "stops": stops}, f"{w.id}|{row['code']}", db, get)
+    d = _call({**_base("google_flights", w, cfg), "arrival_id": row["code"], "stops": stops}, f"{w.id}|{row['code']}", st, get)
     pi = d.get("price_insights", {})
     rng = pi.get("typical_price_range") or [None, None]
     first = min(_itins(d), key=lambda x: x["price"], default=None)

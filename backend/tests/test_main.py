@@ -1,12 +1,13 @@
 import json
 import re
 import pathlib
-from datetime import date
+from datetime import date, datetime
 
+import pytest
 import yaml
 
+from fakefs import new_store
 from flybye import __main__ as main
-from flybye import db as dbm
 
 FIX = pathlib.Path(__file__).parent / "fixtures"
 CFG = yaml.safe_load((pathlib.Path(__file__).parents[2] / "config.yaml").read_text())
@@ -20,6 +21,17 @@ DTEND;VALUE=DATE:20261116
 END:VEVENT
 END:VCALENDAR
 """
+
+
+@pytest.fixture(autouse=True)
+def app_url(monkeypatch):
+    monkeypatch.setenv("APP_URL", "https://app.test/Flybye/")
+
+
+def fresh():
+    st = new_store()
+    st.now = lambda: datetime(2026, 10, 17, 8)
+    return st
 
 
 class Fakes:
@@ -37,95 +49,125 @@ class Fakes:
         n = len(re.findall(r"^\d+\. ", messages[0]["content"], re.M))
         return json.dumps([{"i": i, "block": True, "why": "work"} for i in range(n)])
 
-    def send(self, title, message, click=None):
-        self.sent.append((title, message, click))
+    def send(self, title, message, data=None, link=None):
+        self.sent.append((title, message, data, link))
 
 
-def run(today, f, db):
-    main.daily(CFG, db, today, fetch=lambda url: ICS, chat=f.chat, get=f.get, send=f.send)
+def run(today, f, st):
+    main.daily(CFG, st, today, fetch=lambda url: ICS, chat=f.chat, get=f.get, send=f.send)
 
 
 def test_daily_skips_blocked_window_stores_prices_and_spends_allowance():
-    db, f = dbm.connect(":memory:"), Fakes()
-    run(date(2026, 10, 17), f, db)  # Saturday: no summary
+    st, f = fresh(), Fakes()
+    run(date(2026, 10, 17), f, st)  # Saturday: no summary
     searched = {(p["outbound_date"], p["return_date"]) for p in f.params if p["engine"] == "google_travel_explore"}
     assert ("2026-11-13", "2026-11-15") not in searched          # the offsite blocks that weekend
-    used = db.execute("SELECT count(*) FROM searches").fetchone()[0]
+    used = st.budget("2026-10")["used"]
     assert 0 < used <= main.pick.allowance(CFG["search"]["cap"], 0, date(2026, 10, 17)) + CFG["search"]["confirm_per_run"]
-    assert db.execute("SELECT count(*) FROM prices").fetchone()[0] > 0
+    assert st.fs.data["latest"] and st.route_prices("DEN", "weekend")
     assert f.sent == []                                         # 858 is above the typical low of 390
 
 
-def test_cheap_confirmed_wish_city_sends_one_alert_with_link():
-    db, f = dbm.connect(":memory:"), Fakes(lowest=350)
-    run(date(2026, 10, 17), f, db)
+def test_cheap_confirmed_wish_city_sends_one_alert_with_app_link():
+    st, f = fresh(), Fakes(lowest=350)
+    run(date(2026, 10, 17), f, st)
     assert 1 <= len(f.sent) <= 2
-    title, msg, click = f.sent[0]
-    assert "Flybye" in title and "google.com/travel/flights" in click
-    assert db.execute("SELECT count(*) FROM alerts").fetchone()[0] == len(f.sent)
+    title, msg, data, link = f.sent[0]
+    assert "Flybye" in title and set(data) == {"window_id", "code"}
+    assert link == f"https://app.test/Flybye/#trip={data['window_id']}|{data['code']}"
+    assert len(st.alerts()) == len(f.sent)
 
 
 def test_sunday_sends_summary_and_new_labels():
-    db, f = dbm.connect(":memory:"), Fakes()
-    run(date(2026, 10, 18), f, db)
-    title, msg, _ = f.sent[-1]
-    assert title.startswith("Flybye: this week") and "1 new calendar event" in msg
-    run(date(2026, 10, 25), f, db)
+    st, f = fresh(), Fakes()
+    run(date(2026, 10, 18), f, st)
+    title, msg, _, link = f.sent[-1]
+    assert title.startswith("Flybye: this week") and "1 new calendar event" in msg and link == "https://app.test/Flybye/"
+    run(date(2026, 10, 25), f, st)
     assert "new calendar event" not in f.sent[-1][1]            # labels only counted once
 
 
+def test_every_daily_run_writes_the_suggestions_doc():
+    st, f = fresh(), Fakes()
+    run(date(2026, 10, 17), f, st)                              # a Saturday: no summary, still published
+    doc = st.fs.data["suggestions"]["current"]
+    assert set(doc) == {"updated", "windows", "top"} and doc["windows"] and 1 <= len(doc["top"]) <= 4
+    ids = {w["id"] for w in doc["windows"]}
+    assert "weekend:2026-11-13:2026-11-15" not in ids           # the offsite blocks it
+    assert all(t["window_id"] in ids for t in doc["top"])
+    assert all(len(w["picks"]) <= 8 for w in doc["windows"])
+
+
 def test_monthly_cap_stops_searches():
-    db, f = dbm.connect(":memory:"), Fakes()
-    for _ in range(CFG["search"]["cap"]):
-        db.execute("INSERT INTO searches VALUES('2026-10-02T00:00:00','x','y')")
-    run(date(2026, 10, 17), f, db)
+    st, f = fresh(), Fakes()
+    st.fs.collection("meta").document("budget").set({"month": "2026-10", "used": CFG["search"]["cap"], "last": {}})
+    run(date(2026, 10, 17), f, st)
     assert f.params == []
+
+
+def test_budget_used_starts_over_in_a_new_month():
+    st, f = fresh(), Fakes()
+    st.fs.collection("meta").document("budget").set({"month": "2026-09", "used": CFG["search"]["cap"], "last": {}})
+    run(date(2026, 10, 17), f, st)
+    assert f.params and st.budget("2026-10")["used"] == len(f.params)
+
+
+def test_settings_are_seeded_from_config_then_the_app_wins(monkeypatch):
+    monkeypatch.setenv("FLYBYE_CONFIG", str(pathlib.Path(__file__).parents[2] / "config.yaml"))
+    st = fresh()
+    cfg = main.load_cfg(st)
+    assert cfg["cities"] == CFG["cities"] and "ai" in cfg
+    saved = st.fs.data["settings"]["main"]
+    assert "ai" not in saved and "db" not in saved and saved["home"] == "ORD"
+    saved["home"] = "MDW"
+    assert main.load_cfg(st)["home"] == "MDW"
 
 
 # --- review fixes ------------------------------------------------------------------------------------------------
 def test_confirm_failure_does_not_skip_sunday_summary():
-    db, f = dbm.connect(":memory:"), Fakes(lowest=350)
+    st, f = fresh(), Fakes(lowest=350)
 
     def get(p):
         if p["engine"] == "google_flights" and "arrival_id" in p and p["arrival_id"] != "OPO":
             raise RuntimeError("SerpApi: timeout")
         return f.get(p)
-    main.daily(CFG, db, date(2026, 10, 18), fetch=lambda url: ICS, chat=f.chat, get=get, send=f.send)
+    main.daily(CFG, st, date(2026, 10, 18), fetch=lambda url: ICS, chat=f.chat, get=get, send=f.send)
     assert f.sent and f.sent[-1][0].startswith("Flybye: this week")
 
 
 def test_quota_error_stops_the_sweep_and_tells_us():
-    db, f = dbm.connect(":memory:"), Fakes()
+    st, f = fresh(), Fakes()
 
     def get(p):
         f.params.append(p)
         return {"error": "Your account has run out of searches."}
-    main.daily(CFG, db, date(2026, 10, 17), fetch=lambda url: ICS, chat=f.chat, get=get, send=f.send)
+    main.daily(CFG, st, date(2026, 10, 17), fetch=lambda url: ICS, chat=f.chat, get=get, send=f.send)
     assert len(f.params) == 1
-    assert any("out of searches" in m for _, m, _ in f.sent)
+    assert any("out of searches" in m for _, m, _, _ in f.sent)
 
 
 def test_weekly_cap_checked_before_spending_a_confirm():
-    db, f = dbm.connect(":memory:"), Fakes(lowest=350)
+    st, f = fresh(), Fakes(lowest=350)
     for d in ("2026-10-12", "2026-10-13"):
-        db.execute("INSERT INTO alerts VALUES(?, 'X', 'a', 'b', 1, 'weekend')", (d,))
-    run(date(2026, 10, 17), f, db)
+        st.add_alert({"at": d, "code": "X", "out": "a", "ret": "b", "price": 1, "kind": "weekend"})
+    run(date(2026, 10, 17), f, st)
     assert not [p for p in f.params if p["engine"] == "google_flights" and p.get("arrival_id") != "OPO"]
 
 
 def test_summary_sends_label_counts_not_titles():
-    db, f = dbm.connect(":memory:"), Fakes()
-    run(date(2026, 10, 18), f, db)
+    st, f = fresh(), Fakes()
+    run(date(2026, 10, 18), f, st)
     msg = f.sent[-1][1]
     assert "Work offsite" not in msg and "1 new calendar event" in msg
 
 
 def test_summary_ignores_prices_older_than_three_weeks():
-    db, f = dbm.connect(":memory:"), Fakes()
-    run(date(2026, 10, 18), f, db)
-    db.execute("UPDATE prices SET seen='2026-09-01'")
+    st, f = fresh(), Fakes()
+    run(date(2026, 10, 18), f, st)
+    for d in st.fs.data["latest"].values():
+        d["seen"] = "2026-09-01"
     f.sent.clear()
     f.explore = {"destinations": []}
     f.flights = {"best_flights": [], "other_flights": [], "price_insights": {}}
-    run(date(2026, 10, 25), f, db)
+    run(date(2026, 10, 25), f, st)
     assert "No priced trips" in f.sent[-1][1]

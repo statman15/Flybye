@@ -2,9 +2,9 @@ import json
 
 import pytest
 import pathlib
-from datetime import date
+from datetime import date, datetime
 
-from flybye import db as dbm
+from fakefs import new_store
 from flybye import pick, serp
 from flybye.windows import Window
 
@@ -112,6 +112,31 @@ def test_summary_top_three_wish_plus_one_surprise():
     assert "1 new calendar event checked, 1 block trips" in text and "Dentist" not in text
 
 
+def test_suggestions_doc_shape():
+    w2 = Window("weekend", date(2026, 11, 20), date(2026, 11, 22), "Veterans Day")
+    rows = [row("DEN", 300), row("DEN", 350, window=w2), row("FLL", 250, name="Miami"),
+            row("BNA", 100, name="Nashville"), row("ATL", 120, name="Atlanta")]
+    doc = pick.suggestions(rows, {("DEN", "weekend"): 500}, {WE.id: WE, w2.id: w2}, CFG, "2026-10-17T08:00:00")
+    assert doc["updated"] == "2026-10-17T08:00:00"
+    assert [w["id"] for w in doc["windows"]] == [WE.id, w2.id]            # soonest first
+    first = doc["windows"][0]
+    assert set(first) == {"id", "kind", "out", "ret", "holiday", "picks"} and doc["windows"][1]["holiday"] == "Veterans Day"
+    assert [p["code"] for p in first["picks"]][:2] == ["DEN", "FLL"]      # best first: wish cities lead
+    p = next(p for p in first["picks"] if p["code"] == "DEN")
+    assert set(p) == {"code", "name", "price", "usual", "minutes", "stops", "hotel", "airline", "wish", "link"}
+    assert p["usual"] == 500 and p["wish"] is True and p["name"] == "Denver"
+    assert p["link"].startswith("https://www.google.com/travel/flights?q=") and "DEN" in p["link"]
+    assert next(p for p in first["picks"] if p["code"] == "BNA")["usual"] is None
+    assert [(t["code"], t["window_id"]) for t in doc["top"]][-1] == ("BNA", WE.id)   # 3 wish picks + the surprise
+    assert len(doc["top"]) == 4 and sum(t["wish"] for t in doc["top"]) == 3
+
+
+def test_suggestions_keep_at_most_eight_picks_per_window():
+    rows = [row(f"X{i:02d}", 100 + i, name=f"City{i}") for i in range(12)]
+    doc = pick.suggestions(rows, {}, {WE.id: WE}, CFG, "t")
+    assert len(doc["windows"][0]["picks"]) == 8 and doc["top"][0]["price"] == 100 and len(doc["top"]) == 1
+
+
 # --- serp parsing (real response shapes from the 2026-10-17 spike) -------------------------------------------------
 def fake_get(name):
     data = json.loads((FIX / name).read_text())
@@ -124,45 +149,45 @@ def fake_get(name):
 
 
 def test_explore_rows_and_search_logged():
-    db = dbm.connect(":memory:")
+    st = new_store()
     get, calls = fake_get("explore.json")
-    rows = serp.explore(WE, None, CFG, db, get)
+    rows = serp.explore(WE, None, CFG, st, get)
     assert {r["code"] for r in rows} == {"FLL", "DEN", "BNA"} and len(rows) == 4  # unpriced Victoria dropped
     den = next(r for r in rows if r["code"] == "DEN")
     assert den["price"] == 410 and den["window_id"] == WE.id and den["stops"] == 0
     p = calls[0]
     assert p["engine"] == "google_travel_explore" and p["outbound_date"] == "2026-11-13" and p["stops"] == 1
     assert "arrival_area_id" not in p
-    assert db.execute("SELECT count(*) FROM searches").fetchone()[0] == 1
+    assert st.budget(f"{datetime.now():%Y-%m}")["used"] == 1
 
 
 def test_flights_cheapest_itinerary_and_confirm():
-    db = dbm.connect(":memory:")
+    st = new_store()
     get, calls = fake_get("flights.json")
-    r = serp.flights(LONG, ["OPO"], 2, "Porto", CFG, db, get)
+    r = serp.flights(LONG, ["OPO"], 2, "Porto", CFG, st, get)
     assert r["price"] == 858 and r["code"] == "OPO" and r["source"] == "flights" and calls[0]["stops"] == 2
-    c = serp.confirm(row("BNA", 858), CFG, db, get)
+    c = serp.confirm(row("BNA", 858), CFG, st, get)
     assert c["lowest"] == 858 and c["typical_low"] == 390 and c["typical_high"] == 740
     assert calls[1]["arrival_id"] == "BNA" and calls[1]["stops"] == 1
 
 
 def test_confirm_uses_the_city_stops_rule():
-    db = dbm.connect(":memory:")
+    st = new_store()
     get, calls = fake_get("flights.json")
-    serp.confirm(row("OPO", 900, window=LONG), CFG, db, get)
+    serp.confirm(row("OPO", 900, window=LONG), CFG, st, get)
     assert calls[0]["stops"] == 2
 
 
 def test_no_results_error_means_empty_not_failure():
-    db = dbm.connect(":memory:")
-    rows = serp.explore(LONG, "/m/02j9z", CFG, db, lambda p: {"error": "Google Travel Explore hasn't returned any results for this query."})
+    st = new_store()
+    rows = serp.explore(LONG, "/m/02j9z", CFG, st, lambda p: {"error": "Google Travel Explore hasn't returned any results for this query."})
     assert rows == []
 
 
 def test_quota_error_is_fatal():
-    db = dbm.connect(":memory:")
+    st = new_store()
     with pytest.raises(serp.Fatal):
-        serp.explore(WE, None, CFG, db, lambda p: {"error": "Invalid API key. Your API key should be here"})
+        serp.explore(WE, None, CFG, st, lambda p: {"error": "Invalid API key. Your API key should be here"})
 
 
 def test_unknown_baselines_cheapest_first_and_recently_confirmed_skipped():
