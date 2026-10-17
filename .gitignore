@@ -5,3 +5,4 @@ config.yaml
 spike/out/
 .superpowers/
 *.db
+*.egg-info/
