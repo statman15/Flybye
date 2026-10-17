@@ -1,0 +1,7 @@
+icalendar>=6
+recurring-ical-events>=3
+pyyaml>=6
+tzdata
+
+[test]
+pytest>=8

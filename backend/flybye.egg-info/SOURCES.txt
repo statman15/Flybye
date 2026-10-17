@@ -1,0 +1,7 @@
+pyproject.toml
+flybye/__init__.py
+flybye.egg-info/PKG-INFO
+flybye.egg-info/SOURCES.txt
+flybye.egg-info/dependency_links.txt
+flybye.egg-info/requires.txt
+flybye.egg-info/top_level.txt
