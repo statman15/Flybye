@@ -74,7 +74,7 @@ def test_cheap_confirmed_wish_city_sends_one_alert_with_app_link():
     assert 1 <= len(f.sent) <= 2
     title, msg, data, link = f.sent[0]
     assert "Flybye" in title and set(data) == {"window_id", "code"}
-    assert link == f"https://app.test/Flybye/#trip={data['window_id']}|{data['code']}"
+    assert link == f"https://app.test/Flybye/#trip={data['window_id']}%7C{data['code']}"
     assert len(st.alerts()) == len(f.sent)
 
 
@@ -171,3 +171,28 @@ def test_summary_ignores_prices_older_than_three_weeks():
     f.flights = {"best_flights": [], "other_flights": [], "price_insights": {}}
     run(date(2026, 10, 25), f, st)
     assert "No priced trips" in f.sent[-1][1]
+
+
+# --- M2 review fixes ---------------------------------------------------------------------------------------------
+def test_app_link_encodes_the_trip_for_fcm(monkeypatch):
+    monkeypatch.setenv("APP_URL", "https://x.test/Flybye/")
+    assert main.app_link("weekend:2026-11-13:2026-11-15", "DEN") == "https://x.test/Flybye/#trip=weekend:2026-11-13:2026-11-15%7CDEN"
+    assert main.app_link() == "https://x.test/Flybye/"
+
+
+def test_windows_report_hides_titles_and_dates_in_ci():
+    from flybye.windows import Window
+    w = [Window("weekend", date(2026, 11, 6), date(2026, 11, 8), None)]
+    labels = [{"title": "Dentist", "why": "appt", "block": True, "override": None}]
+    local = "\n".join(main.windows_report(w, labels, CFG, ci=False))
+    ci = "\n".join(main.windows_report(w, labels, CFG, ci=True))
+    assert "Dentist" in local and "2026-11-06" in local
+    assert "Dentist" not in ci and "2026-11" not in ci and "1 free window" in ci and "1 calendar event" in ci
+
+
+def test_suggestions_updated_has_a_timezone():
+    from datetime import datetime as dt
+    st, f = new_store(), Fakes()
+    run(date(2026, 10, 17), f, st)
+    doc = st.fs.collection("suggestions").document("current").get().to_dict()
+    assert dt.fromisoformat(doc["updated"]).tzinfo is not None

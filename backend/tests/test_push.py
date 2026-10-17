@@ -37,7 +37,7 @@ def test_dead_tokens_are_pruned_but_other_failures_keep_the_device():
     answers = {"live": ok(), "gone": bad(messaging.UnregisteredError("x")),
                "junk": bad(exceptions.InvalidArgumentError("x")), "flaky": bad(exceptions.UnavailableError("x"))}
     push.send(st, "T", "B", fan=lambda msgs: SimpleNamespace(responses=[answers[m.token] for m in msgs]))
-    assert sorted(st.device_tokens()) == ["flaky", "live"]
+    assert sorted(st.device_tokens()) == ["flaky", "junk", "live"]  # InvalidArgument can mean a bad message, not a bad token
 
 
 def test_no_devices_sends_nothing():

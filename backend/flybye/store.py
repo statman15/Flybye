@@ -4,6 +4,8 @@ import json
 import os
 from datetime import datetime, timedelta
 
+from .windows import TZ
+
 
 def label_id(key):
     return hashlib.sha1(key.encode()).hexdigest()[:20]
@@ -22,7 +24,7 @@ def connect():
 
 
 class Store:
-    def __init__(self, fs, now=datetime.now):
+    def __init__(self, fs, now=lambda: datetime.now(TZ)):
         self.fs, self.now = fs, now
 
     def _get(self, col, id, default):

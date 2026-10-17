@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: write   # only for the keep-alive step below
 
 concurrency: daily
 
@@ -33,3 +34,10 @@ jobs:
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
           APP_URL: https://statman15.github.io/Flybye/
+      # GitHub switches off scheduled workflows in a public repo after 60 days without commits.
+      # Re-enabling through the API resets that clock, so the morning sweep never silently stops.
+      - name: Keep the schedule alive
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow enable daily.yml -R "$GITHUB_REPOSITORY"

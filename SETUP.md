@@ -8,7 +8,7 @@ Do these once, in order. Nothing runs on the homelab, and no key or email ever g
 3. In **Authentication → Settings → Authorized domains**, add `statman15.github.io`.
 4. **Build → Firestore Database → Create database**, in **production mode**, location `us-central1`.
 5. In **Firestore → Rules**, paste the contents of `firestore.rules` from this repo and **Publish**.
-6. In **Firestore → Data**, create collection `allow`. Add one document whose **ID is your Google email** (no fields needed), then a second one with **Laura's Google email**. These are the only accounts that can open Flybye.
+6. In **Firestore → Data**, create collection `allow`. Add one document whose **ID is your Google email in lowercase** (no fields needed), then a second one with **Laura's Google email in lowercase**. These are the only accounts that can open Flybye.
 
 ## 2. Apps in Firebase
 1. **Project settings (⚙) → Your apps → Web (`</>`)**. Nickname `Flybye web`, and skip Hosting. Copy the `firebaseConfig` values into `web/firebase-config.js`. These values are meant to be public, so commit that file.

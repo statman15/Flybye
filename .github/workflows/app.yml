@@ -46,6 +46,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Firebase config is filled in
+        run: "! grep -q REPLACE_ME web/firebase-config.js || { echo '::error::Fill in web/firebase-config.js (SETUP.md 2.1-2.2) before deploying.'; exit 1; }"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -67,6 +69,10 @@ jobs:
       VERSION_NAME: 1.0.${{ github.run_number }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false  # npm and Gradle scripts run below; don't leave a write token in .git/config
+      - name: Firebase config is filled in
+        run: "! grep -q REPLACE_ME web/firebase-config.js || { echo '::error::Fill in web/firebase-config.js (SETUP.md 2.1-2.2) before deploying.'; exit 1; }"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22

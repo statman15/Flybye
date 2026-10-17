@@ -1,5 +1,5 @@
 rules_version = '2';
-// Paste into Firebase console -> Firestore -> Rules. The two allowed Google accounts live in allow/{email} (created by hand, never in git).
+// Paste into Firebase console -> Firestore -> Rules. The two allowed Google accounts live in allow/{email}: lowercase email as the doc ID, created by hand, never in git.
 // The daily job uses the Admin SDK, which ignores these rules.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -7,7 +7,7 @@ service cloud.firestore {
     function ok() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && exists(/databases/$(database)/documents/allow/$(request.auth.token.email));
+        && exists(/databases/$(database)/documents/allow/$(request.auth.token.email.lower()));
     }
 
     match /settings/{id} {
@@ -22,7 +22,8 @@ service cloud.firestore {
     match /labels/{id} {
       allow read: if ok();
       allow update: if ok()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['override']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['override'])
+        && (request.resource.data.override == null || request.resource.data.override is bool);
     }
 
     // A phone writes its own push token. Update is allowed too, so tapping "Turn on alerts" twice (or a token refresh) doesn't fail.
@@ -33,7 +34,7 @@ service cloud.firestore {
 
     // Read only your own doc, so the app can tell "signed in but not allowed".
     match /allow/{email} {
-      allow get: if request.auth != null && request.auth.token.email == email;
+      allow get: if request.auth != null && request.auth.token.email.lower() == email;
     }
   }
 }

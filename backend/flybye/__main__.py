@@ -1,6 +1,7 @@
 """python -m flybye daily | windows | summary | test-notify   (run from the repo root; reads config.yaml, needs FIREBASE_SA)"""
 import os
 import sys
+import urllib.parse
 from datetime import datetime, timedelta
 
 import yaml
@@ -12,7 +13,7 @@ from .windows import TZ, candidates, is_free
 
 def app_link(window_id=None, code=None):
     url = os.environ.get("APP_URL") or None
-    return url and (f"{url}#trip={window_id}|{code}" if window_id else url)
+    return url and (url + "#trip=" + urllib.parse.quote(f"{window_id}|{code}", safe=":") if window_id else url)
 
 
 def load_cfg(st):
@@ -101,14 +102,24 @@ def latest(cfg, st, today, windows):
 
 def publish(cfg, st, today, windows):
     rows, ids, base = latest(cfg, st, today, windows)
-    st.write_suggestions(pick.suggestions(rows, base, ids, cfg, datetime.now().isoformat(timespec="seconds")))
+    st.write_suggestions(pick.suggestions(rows, base, ids, cfg, datetime.now(TZ).isoformat(timespec="seconds")))
 
 
 def summary(cfg, st, today, windows, send):
     rows, ids, base = latest(cfg, st, today, windows)
     labels = [{**l, "block": storem.blocks(l)} for l in st.labels_since(st.summary_last())]
     send(*pick.summary(rows, base, ids, cfg, labels), None, app_link())
-    st.set_summary_last(datetime.now().isoformat(timespec="seconds"))
+    st.set_summary_last(datetime.now(TZ).isoformat(timespec="seconds"))
+
+
+def windows_report(windows, labels, cfg, ci):
+    """The repo is public, so in Actions logs only counts: no event titles, no away dates."""
+    blocking = sum(storem.blocks(l) for l in labels)
+    if ci:
+        return [f"{len(windows)} free window{'s' if len(windows) != 1 else ''}, "
+                f"{len(labels)} calendar event{'s' if len(labels) != 1 else ''} labelled ({blocking} block trips)"]
+    return ([f"{w.id} {w.holiday or ''} cost {pick.cost(w, cfg)}" for w in windows]
+            + [("BLOCK " if storem.blocks(l) else "ok    ") + f"{l['title']} - {l['why']}" for l in labels])
 
 
 def daily(cfg, st, today, fetch=cal.fetch, chat=ai.http_chat, get=serp.http_get, send=None):
@@ -131,10 +142,8 @@ def main(argv):
     if cmd == "daily":
         daily(cfg, st, today)
     elif cmd == "windows":
-        for w in free_windows(cfg, st, today, cal.fetch, ai.http_chat):
-            print(w.id, w.holiday or "", f"cost {pick.cost(w, cfg)}")
-        for l in reversed(st.labels_since("")):
-            print(("BLOCK " if storem.blocks(l) else "ok    ") + l["title"], "-", l["why"])
+        ws = free_windows(cfg, st, today, cal.fetch, ai.http_chat)
+        print("\n".join(windows_report(ws, list(reversed(st.labels_since(""))), cfg, bool(os.environ.get("GITHUB_ACTIONS")))))
     elif cmd == "summary":
         summary(cfg, st, today, free_windows(cfg, st, today, cal.fetch, ai.http_chat), lambda *a: push.send(st, *a))
     elif cmd == "test-notify":

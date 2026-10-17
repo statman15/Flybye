@@ -1,7 +1,7 @@
 """Push through Firebase Cloud Messaging to every device the app has registered."""
-from firebase_admin import exceptions, messaging
+from firebase_admin import messaging
 
-DEAD = (messaging.UnregisteredError, exceptions.InvalidArgumentError)  # the token will never work again
+DEAD = (messaging.UnregisteredError,)  # the token will never work again; InvalidArgument may just mean a bad message
 
 
 def send(st, title, body, data=None, link=None, fan=messaging.send_each):

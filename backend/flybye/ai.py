@@ -6,6 +6,8 @@ import sys
 import urllib.request
 from datetime import datetime
 
+from .windows import TZ
+
 from .store import blocks
 
 PROMPT = """These are events from Chris and Laura's shared calendar. For each one, decide whether it means they \
@@ -61,7 +63,7 @@ def label_events(events, st, cfg, chat=http_chat):
                 st.labels_put(key, {"start": e.start.isoformat()})
         else:
             todo.append((key, e))
-    now = datetime.now().isoformat(timespec="seconds")
+    now = datetime.now(TZ).isoformat(timespec="seconds")
     for n in range(0, len(todo), 40):
         batch = todo[n:n + 40]
         answers, src = _ask([e for _, e in batch], cfg, chat)
