@@ -6,7 +6,7 @@ from datetime import date
 import yaml
 
 from flybye import __main__ as main
-from flybye import db as dbm
+from fakefs import new_store
 
 FIX = pathlib.Path(__file__).parent / "fixtures"
 CFG = yaml.safe_load((pathlib.Path(__file__).parents[2] / "config.yaml").read_text())
@@ -46,7 +46,7 @@ def run(today, f, db):
 
 
 def test_daily_skips_blocked_window_stores_prices_and_spends_allowance():
-    db, f = dbm.connect(":memory:"), Fakes()
+    db, f = new_store(), Fakes()
     run(date(2026, 10, 17), f, db)  # Saturday: no summary
     searched = {(p["outbound_date"], p["return_date"]) for p in f.params if p["engine"] == "google_travel_explore"}
     assert ("2026-11-13", "2026-11-15") not in searched          # the offsite blocks that weekend
@@ -57,7 +57,7 @@ def test_daily_skips_blocked_window_stores_prices_and_spends_allowance():
 
 
 def test_cheap_confirmed_wish_city_sends_one_alert_with_link():
-    db, f = dbm.connect(":memory:"), Fakes(lowest=350)
+    db, f = new_store(), Fakes(lowest=350)
     run(date(2026, 10, 17), f, db)
     assert 1 <= len(f.sent) <= 2
     title, msg, click = f.sent[0]
@@ -66,7 +66,7 @@ def test_cheap_confirmed_wish_city_sends_one_alert_with_link():
 
 
 def test_sunday_sends_summary_and_new_labels():
-    db, f = dbm.connect(":memory:"), Fakes()
+    db, f = new_store(), Fakes()
     run(date(2026, 10, 18), f, db)
     title, msg, _ = f.sent[-1]
     assert title.startswith("Flybye: this week") and "1 new calendar event" in msg
@@ -75,7 +75,7 @@ def test_sunday_sends_summary_and_new_labels():
 
 
 def test_monthly_cap_stops_searches():
-    db, f = dbm.connect(":memory:"), Fakes()
+    db, f = new_store(), Fakes()
     for _ in range(CFG["search"]["cap"]):
         db.execute("INSERT INTO searches VALUES('2026-10-02T00:00:00','x','y')")
     run(date(2026, 10, 17), f, db)
@@ -84,7 +84,7 @@ def test_monthly_cap_stops_searches():
 
 # --- review fixes ------------------------------------------------------------------------------------------------
 def test_confirm_failure_does_not_skip_sunday_summary():
-    db, f = dbm.connect(":memory:"), Fakes(lowest=350)
+    db, f = new_store(), Fakes(lowest=350)
 
     def get(p):
         if p["engine"] == "google_flights" and "arrival_id" in p and p["arrival_id"] != "OPO":
@@ -95,7 +95,7 @@ def test_confirm_failure_does_not_skip_sunday_summary():
 
 
 def test_quota_error_stops_the_sweep_and_tells_us():
-    db, f = dbm.connect(":memory:"), Fakes()
+    db, f = new_store(), Fakes()
 
     def get(p):
         f.params.append(p)
@@ -106,7 +106,7 @@ def test_quota_error_stops_the_sweep_and_tells_us():
 
 
 def test_weekly_cap_checked_before_spending_a_confirm():
-    db, f = dbm.connect(":memory:"), Fakes(lowest=350)
+    db, f = new_store(), Fakes(lowest=350)
     for d in ("2026-10-12", "2026-10-13"):
         db.execute("INSERT INTO alerts VALUES(?, 'X', 'a', 'b', 1, 'weekend')", (d,))
     run(date(2026, 10, 17), f, db)
@@ -114,14 +114,14 @@ def test_weekly_cap_checked_before_spending_a_confirm():
 
 
 def test_summary_sends_label_counts_not_titles():
-    db, f = dbm.connect(":memory:"), Fakes()
+    db, f = new_store(), Fakes()
     run(date(2026, 10, 18), f, db)
     msg = f.sent[-1][1]
     assert "Work offsite" not in msg and "1 new calendar event" in msg
 
 
 def test_summary_ignores_prices_older_than_three_weeks():
-    db, f = dbm.connect(":memory:"), Fakes()
+    db, f = new_store(), Fakes()
     run(date(2026, 10, 18), f, db)
     db.execute("UPDATE prices SET seen='2026-09-01'")
     f.sent.clear()

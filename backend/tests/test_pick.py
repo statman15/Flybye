@@ -4,7 +4,7 @@ import pytest
 import pathlib
 from datetime import date
 
-from flybye import db as dbm
+from fakefs import new_store
 from flybye import pick, serp
 from flybye.windows import Window
 
@@ -124,7 +124,7 @@ def fake_get(name):
 
 
 def test_explore_rows_and_search_logged():
-    db = dbm.connect(":memory:")
+    db = new_store()
     get, calls = fake_get("explore.json")
     rows = serp.explore(WE, None, CFG, db, get)
     assert {r["code"] for r in rows} == {"FLL", "DEN", "BNA"} and len(rows) == 4  # unpriced Victoria dropped
@@ -137,7 +137,7 @@ def test_explore_rows_and_search_logged():
 
 
 def test_flights_cheapest_itinerary_and_confirm():
-    db = dbm.connect(":memory:")
+    db = new_store()
     get, calls = fake_get("flights.json")
     r = serp.flights(LONG, ["OPO"], 2, "Porto", CFG, db, get)
     assert r["price"] == 858 and r["code"] == "OPO" and r["source"] == "flights" and calls[0]["stops"] == 2
@@ -147,20 +147,20 @@ def test_flights_cheapest_itinerary_and_confirm():
 
 
 def test_confirm_uses_the_city_stops_rule():
-    db = dbm.connect(":memory:")
+    db = new_store()
     get, calls = fake_get("flights.json")
     serp.confirm(row("OPO", 900, window=LONG), CFG, db, get)
     assert calls[0]["stops"] == 2
 
 
 def test_no_results_error_means_empty_not_failure():
-    db = dbm.connect(":memory:")
+    db = new_store()
     rows = serp.explore(LONG, "/m/02j9z", CFG, db, lambda p: {"error": "Google Travel Explore hasn't returned any results for this query."})
     assert rows == []
 
 
 def test_quota_error_is_fatal():
-    db = dbm.connect(":memory:")
+    db = new_store()
     with pytest.raises(serp.Fatal):
         serp.explore(WE, None, CFG, db, lambda p: {"error": "Invalid API key. Your API key should be here"})
 

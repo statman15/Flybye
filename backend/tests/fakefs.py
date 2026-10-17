@@ -45,3 +45,8 @@ class FakeFS:
 
     def collection(self, name):
         return Collection(self.data.setdefault(name, {}))
+
+
+def new_store():
+    from flybye.store import Store
+    return Store(FakeFS())
