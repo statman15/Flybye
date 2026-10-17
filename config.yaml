@@ -1,0 +1,37 @@
+# Flybye settings. No secrets here: SERPAPI_KEY, ICAL_URL, GEMINI_KEY, NTFY_TOPIC come from GitHub Secrets.
+home: ORD
+db: data/flybye.db
+
+trips:                       # weeks = how far ahead the departure can be
+  weekend: {enabled: true, weeks: [2, 10]}    # Fri -> Sun
+  3day:    {enabled: true, weeks: [2, 12]}    # Thu -> Sun and Fri -> Mon
+  long:    {enabled: true, weeks: [3, 17], nights: [7]}   # Sat -> Sat
+
+cities:                      # the wish list: boosts the score; only these can trigger an instant alert
+  - {name: Denver,        airports: [DEN],      trips: [weekend, 3day, long]}
+  - {name: Key West,      airports: [EYW],      trips: [weekend, 3day, long]}
+  - {name: Miami,         airports: [MIA, FLL], trips: [weekend, 3day, long]}
+  - {name: San Francisco, airports: [SFO, OAK], trips: [weekend, 3day, long]}
+  - {name: Tokyo,         airports: [NRT, HND], trips: [long]}
+  - {name: Paris,         airports: [CDG, ORY], trips: [long]}
+  - {name: Lisbon,        airports: [LIS],      trips: [long]}
+  - {name: Porto,         airports: [OPO],      trips: [long], stops: 2}   # no nonstop from ORD: 1 stop allowed
+
+search:
+  cap: 230                   # SerpApi free tier is 250/month; the rest is for manual tests
+  adults: 2
+  stops: 1                   # SerpApi: 1 = nonstop only
+  long_areas: [null, /m/02j9z, /m/0j0k]   # default (North America), Europe, Asia
+  confirm_per_run: 2         # google_flights checks of possible deals per day
+
+alerts:
+  deal_ratio: 0.8            # check a wish city when it's 20%+ under its usual price (or we don't know it yet)
+  max_instant_per_week: 2
+  repeat_drop: 0.9           # same trip again only if 10% cheaper than last alert
+
+score: {hour_penalty: 2, wish_bonus: 10, holiday_bonus: 5}
+
+ai:
+  - {name: gemini, url: "https://generativelanguage.googleapis.com/v1beta/openai", key_env: GEMINI_KEY, model: gemini-2.5-flash}
+
+overrides: {}                # "Event title" or uid: block | ignore

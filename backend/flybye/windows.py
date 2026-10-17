@@ -45,7 +45,7 @@ def candidates(today, trips):
     hol = {**holidays(today.year), **holidays(today.year + 1)}
     out = []
     for kind, c in trips.items():
-        if not c.get("on"):
+        if not c.get("enabled"):
             continue
         shapes = SHAPES.get(kind) or [(5, n) for n in c.get("nights", [7])]
         first, last = today + timedelta(weeks=c["weeks"][0]), today + timedelta(weeks=c["weeks"][1])

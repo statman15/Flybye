@@ -5,9 +5,9 @@ from flybye.cal import Event
 from flybye.windows import Window, candidates, holidays, is_free
 
 TZ = ZoneInfo("America/Chicago")
-TRIPS = {"weekend": {"on": True, "weeks": [2, 10]},
-         "3day": {"on": True, "weeks": [2, 12]},
-         "long": {"on": True, "weeks": [3, 17], "nights": [7]}}
+TRIPS = {"weekend": {"enabled": True, "weeks": [2, 10]},
+         "3day": {"enabled": True, "weeks": [2, 12]},
+         "long": {"enabled": True, "weeks": [3, 17], "nights": [7]}}
 TODAY = date(2026, 10, 17)  # a Saturday
 
 
@@ -50,7 +50,7 @@ def test_holiday_tag_on_thanksgiving_3day():
 
 
 def test_turned_off_type_gives_nothing():
-    trips = {**TRIPS, "long": {**TRIPS["long"], "on": False}}
+    trips = {**TRIPS, "long": {**TRIPS["long"], "enabled": False}}
     assert not [x for x in candidates(TODAY, trips) if x.kind == "long"]
 
 

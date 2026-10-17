@@ -1,5 +1,6 @@
 """Ask an AI which calendar events really stop us leaving town. Cached per event; config overrides win."""
 import json
+import os
 import re
 import urllib.request
 from datetime import datetime
@@ -16,7 +17,7 @@ Answer ONLY a JSON array: [{"i": <index>, "block": true|false, "why": "<5 words>
 def http_chat(provider, messages):
     req = urllib.request.Request(provider["url"].rstrip("/") + "/chat/completions", method="POST",
                                  data=json.dumps({"model": provider["model"], "messages": messages}).encode(),
-                                 headers={"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"})
+                                 headers={"Authorization": f"Bearer {provider.get('key') or os.environ[provider['key_env']]}", "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.load(r)["choices"][0]["message"]["content"]
 
