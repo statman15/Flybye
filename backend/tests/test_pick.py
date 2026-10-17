@@ -2,7 +2,7 @@ import json
 
 import pytest
 import pathlib
-from datetime import date
+from datetime import date, datetime
 
 from fakefs import new_store
 from flybye import pick, serp
@@ -124,45 +124,45 @@ def fake_get(name):
 
 
 def test_explore_rows_and_search_logged():
-    db = new_store()
+    st = new_store()
     get, calls = fake_get("explore.json")
-    rows = serp.explore(WE, None, CFG, db, get)
+    rows = serp.explore(WE, None, CFG, st, get)
     assert {r["code"] for r in rows} == {"FLL", "DEN", "BNA"} and len(rows) == 4  # unpriced Victoria dropped
     den = next(r for r in rows if r["code"] == "DEN")
     assert den["price"] == 410 and den["window_id"] == WE.id and den["stops"] == 0
     p = calls[0]
     assert p["engine"] == "google_travel_explore" and p["outbound_date"] == "2026-11-13" and p["stops"] == 1
     assert "arrival_area_id" not in p
-    assert db.execute("SELECT count(*) FROM searches").fetchone()[0] == 1
+    assert st.budget(f"{datetime.now():%Y-%m}")["used"] == 1
 
 
 def test_flights_cheapest_itinerary_and_confirm():
-    db = new_store()
+    st = new_store()
     get, calls = fake_get("flights.json")
-    r = serp.flights(LONG, ["OPO"], 2, "Porto", CFG, db, get)
+    r = serp.flights(LONG, ["OPO"], 2, "Porto", CFG, st, get)
     assert r["price"] == 858 and r["code"] == "OPO" and r["source"] == "flights" and calls[0]["stops"] == 2
-    c = serp.confirm(row("BNA", 858), CFG, db, get)
+    c = serp.confirm(row("BNA", 858), CFG, st, get)
     assert c["lowest"] == 858 and c["typical_low"] == 390 and c["typical_high"] == 740
     assert calls[1]["arrival_id"] == "BNA" and calls[1]["stops"] == 1
 
 
 def test_confirm_uses_the_city_stops_rule():
-    db = new_store()
+    st = new_store()
     get, calls = fake_get("flights.json")
-    serp.confirm(row("OPO", 900, window=LONG), CFG, db, get)
+    serp.confirm(row("OPO", 900, window=LONG), CFG, st, get)
     assert calls[0]["stops"] == 2
 
 
 def test_no_results_error_means_empty_not_failure():
-    db = new_store()
-    rows = serp.explore(LONG, "/m/02j9z", CFG, db, lambda p: {"error": "Google Travel Explore hasn't returned any results for this query."})
+    st = new_store()
+    rows = serp.explore(LONG, "/m/02j9z", CFG, st, lambda p: {"error": "Google Travel Explore hasn't returned any results for this query."})
     assert rows == []
 
 
 def test_quota_error_is_fatal():
-    db = new_store()
+    st = new_store()
     with pytest.raises(serp.Fatal):
-        serp.explore(WE, None, CFG, db, lambda p: {"error": "Invalid API key. Your API key should be here"})
+        serp.explore(WE, None, CFG, st, lambda p: {"error": "Invalid API key. Your API key should be here"})
 
 
 def test_unknown_baselines_cheapest_first_and_recently_confirmed_skipped():
