@@ -1,0 +1,40 @@
+name: Daily sweep
+
+# Every morning: test, then calendar -> free windows -> SerpApi -> ntfy. The price database is committed back.
+on:
+  schedule:
+    - cron: "0 13 * * *"   # 08:00 Chicago in summer, 07:00 in winter; GitHub may start it a few minutes late
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "daily | windows | summary | test-notify"
+        default: daily
+
+permissions:
+  contents: write
+
+concurrency: daily   # never two runs pushing the database at once
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -q "./backend[test]"
+      - run: python -m pytest -q backend/tests
+      - run: python -m flybye ${{ inputs.command || 'daily' }}
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          ICAL_URL: ${{ secrets.ICAL_URL }}
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      - name: Save the database
+        if: always()
+        run: |
+          git add -f data/flybye.db 2>/dev/null || exit 0
+          git diff --cached --quiet && exit 0
+          git -c user.name=flybye -c user.email=flybye@users.noreply.github.com commit -q -m "data: $(date -u +%F)"
+          git push
