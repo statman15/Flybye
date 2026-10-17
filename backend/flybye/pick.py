@@ -137,7 +137,7 @@ def summary(rows, baselines, windows, cfg, new_labels):
         lines.append("Surprise: " + fmt_row(other, baselines.get((other["code"], other["kind"])), cfg))
     if not lines:
         lines.append("No priced trips fit your free dates yet.")
-    if new_labels:  # counts only: event titles never go through ntfy
+    if new_labels:  # counts only: event titles never go into a push
         n, b = len(new_labels), sum(bool(l["block"]) for l in new_labels)
         lines.append(f"{n} new calendar event{'s' if n != 1 else ''} checked, {b} block trips (details: run 'windows').")
     return "Flybye: this week's best getaways", "\n".join(lines)
