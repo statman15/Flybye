@@ -16,7 +16,7 @@ Google Flights' free "any dates" tracking already emails price drops for each ro
 | Flights | 2 adults, economy, **nonstop always** (SerpApi `stops=1`). A city can override this; **Porto** allows 1 stop (`stops=2`), because ORD has no nonstop. |
 | Trip types | **Weekend:** Fri evening → Sun, 2–10 weeks out. **3-day weekend:** Thu→Sun or Fri→Mon (holiday Mondays need no vacation day), 2–12 weeks out. **Longer:** 5–9 nights, 3 weeks–4 months out. Each type can be switched on or off in config. |
 | Calendar | One **shared Google Calendar**, read through its private iCal link (no Google sign-in). |
-| What blocks a trip | An **AI labels each event** as a blocker or not, once per event, and the label is cached by event UID and updated date. **OmniRoute first, a Gemini key as fallback.** If both fail, the event blocks. Overrides go in `config.yaml` (`overrides: {uid_or_title: block\|ignore}`). The Sunday summary lists new labels so we can check them. |
+| What blocks a trip | An **AI labels each event** as a blocker or not, once per event, and the label is cached by event UID and updated date. **Gemini (free tier), called directly.** Event titles go to Google's API. If the call fails, the event blocks. Overrides go in `config.yaml` (`overrides: {uid_or_title: block\|ignore}`). The Sunday summary lists new labels so we can check them. |
 | Destinations | **Every nonstop destination from ORD** comes back with each Explore call. The **wish list** in `config.yaml` boosts the score and is the only set of cities that can trigger an instant alert. Add or remove a city by editing that list (in the app from M3). Starting list (2026-10-17): **Denver, Key West, Miami, San Francisco** (all trip types); **Tokyo, Paris, Lisbon, Porto** (longer trips only; Porto allows 1 stop). |
 | Flight data | **SerpApi `google_travel_explore` with exact `outbound_date`/`return_date`** is the sweep: **one call per window** returns every nonstop destination priced on our dates for 2 adults, plus flight time, airline and a hotel price (spike 2026-10-17). `google_flights` is only used to confirm a deal before an instant alert: it gives Google's typical range and the flight times. Travelpayouts was dropped: its data API needs a website, and its cached US fares are thin. Amadeus Self-Service closed 2026-07-17, and Skyscanner and Kiwi are for partners only. |
 | Normal price | Explore has no typical range, so: (1) we store every Explore price in SQLite, and after a few weekly sweeps each route has its own history (median for its trip type and month); (2) before an instant alert, one `google_flights` call gets Google's `typical_price_range` and `price_level`. The spike returned an empty `price_history`, so we don't rely on it. |
@@ -25,9 +25,9 @@ Google Flights' free "any dates" tracking already emails price drops for each ro
 | Weather | Open-Meteo. Within 16 days, the real forecast (free for non-commercial use). Further out, typical weather averaged over the last 10 years from the free historical archive, computed once per city per month and cached. |
 | Alerts | **Instant** when a fare is at or below the low end of Google's typical range on a free window, **at most 2 a week**, and never the same trip twice unless it drops another 10%. Otherwise, a **Sunday top 3**. |
 | Hotels | Explore's `hotel_price` comes at no extra cost, so alerts show it as a rough guide. It's probably a per-night price; check that against Google Hotels. No separate hotel searches. Events: see PARKING_LOT.md. |
-| Notifications (M1) | Home Assistant REST API → `notify.mobile_app_sm_s936u` (Chris) and `notify.mobile_app_laura_s_iphone` (Laura). Both are already set up. No Firebase in M1. |
-| Backend | Homelab LXC **116 at 192.168.1.14**, copying HomelabAssistant's `deploy/` pattern (Debian 13 amd64, static IP, Pi-hole DNS 192.168.1.3, onboot, its own system user, config at `/etc/flybye/config.yaml` with mode 640, data at `/var/lib/flybye`). Python 3. |
-| Apps (later) | HypertroPhy's setup: plain HTML/JS with no build step, a PWA from GitHub Pages for Laura's iPhone, and a Capacitor APK built by GitHub Actions for Chris. Laura gets **Tailscale** on her iPhone then, and the backend is served over HTTPS with Tailscale Serve, the same way OmniRoute is. |
+| Notifications (M1) | **ntfy**: both phones run the free ntfy app and subscribe to one long random topic (kept in a secret). No account. Messages hold trip info only, never calendar details. They do say when we'd be away, so the topic name must stay secret. Later the app's own push may replace it. |
+| Backend | **Not on the homelab (Chris, 2026-10-17).** A **GitHub Actions scheduled workflow** in a **private** repo runs `python -m flybye daily` every morning (cron, so it may start a few minutes late). Settings (cities, trips, weights) live in `config.yaml`, committed. Secrets come from GitHub Secrets as environment variables. The SQLite database `data/flybye.db` is committed back after each run. Python 3. The repo stays private because its data shows when we're away. |
+| Apps (later) | HypertroPhy's setup: plain HTML/JS with no build step, a PWA from GitHub Pages for Laura's iPhone, and a Capacitor APK built by GitHub Actions for Chris. With no server, the plan is that the daily job writes `data/suggestions.json` and the apps read it, and commit edits to `config.yaml`, through the GitHub API using a fine-grained token limited to this repo, entered once on each phone. Settle this at M3. Pages on a private repo needs GitHub Pro, so the app shell may need its own small public repo with no data in it. |
 
 ## How the sweep works
 
@@ -38,7 +38,7 @@ iCal (shared calendar) ──► events ──► AI blocker labels (cached)
                                                     │
          wish list × windows, under the monthly cap ─► SerpApi google_flights (nonstop, 2 adults)
                                                     │
-                       price + price_insights ──► SQLite ──► score ──► HA notify (instant / Sunday)
+                       price + price_insights ──► SQLite ──► score ──► ntfy (instant / Sunday)
 ```
 
 **Score** (higher is better, kept simple to start): price against Google's typical range (the main factor), weather (temperature comfort, rain chance), flight time (shorter is better), and a holiday or long-weekend bonus. The weights live in `config.yaml` so they can be tuned without code changes.
@@ -50,18 +50,18 @@ iCal (shared calendar) ──► events ──► AI blocker labels (cached)
 
 Each one ends with something we both use.
 
-1. **Backend + Home Assistant alerts.**
+1. **Backend + ntfy alerts.**
    - ✅ **Spike (2026-10-17, `spike/serpapi_spike.py`):** Explore with exact dates returned 50 nonstop destinations, all on our dates, for 2 adults. Nashville came back at $858 in both Explore and `google_flights`. `google_flights` `price_insights` gave `typical_price_range` [390, 740] and `price_level: high`, with an empty `price_history`. For a 7-night January trip, the Europe area search found CDG $1,662 and LIS $1,377 nonstop, the Asia search found NRT $2,471 nonstop, and there was no nonstop to Porto. Default Explore returns only the US, Canada, Mexico and the Bahamas.
-   - Next: iCal → AI labels → windows, the weekly sweep (a systemd timer, Sunday morning; no web server yet), SQLite, the instant and Sunday alerts through HA, and `deploy/` scripts for LXC 116.
+   - Next: iCal → AI labels → windows, the daily sweep, SQLite, instant alerts plus the Sunday summary through ntfy, and the GitHub Actions workflow.
    - Tests: windows (overlaps, holidays, recurring events), the budget cap, alert limits.
    - *Done when:* both phones get a real Sunday summary from our actual calendar and wish list.
 2. **Weather.** Open-Meteo forecast and typical weather in the score and the alert text. *Done when:* the Sunday summary shows the weather for each pick.
-3. **The app, read-only.** A small JSON API on the backend (FastAPI, like HomelabAssistant) behind Tailscale Serve HTTPS. Then the PWA plus APK with four screens: current suggestions, destination list, trip types and lead times, home airport. Editing the destination list and trip types writes back to the backend. *Done when:* Laura opens it from her home screen over Tailscale, and Chris from the APK.
+3. **The app.** It reads `data/suggestions.json` from the repo (see Apps above). Then the PWA plus APK with four screens: current suggestions, destination list, trip types and lead times, home airport. Editing the destination list and trip types writes back to the backend. *Done when:* Laura opens it from her home screen, and Chris from the APK.
 4. **App push + overrides.** Web Push for the iPhone PWA (iOS 16.4+, installed to the home screen) and push for the APK, to replace or sit alongside HA. Flip an event's blocker label with one tap. *Done when:* a deal alert opens the trip in the app on both phones.
 
-## Secrets (in `/etc/flybye/config.yaml`, never in git)
+## Secrets (GitHub Secrets, never in git)
 
-SerpApi key, the private iCal URL, a Home Assistant long-lived token, the OmniRoute key, the Gemini key.
+`SERPAPI_KEY`, `ICAL_URL` (the calendar's secret iCal address), `GEMINI_KEY`, `NTFY_TOPIC`.
 
 ## Open
 
