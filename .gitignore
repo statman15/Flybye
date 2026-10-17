@@ -6,3 +6,8 @@ spike/out/
 *.db
 *.egg-info/
 !data/flybye.db
+node_modules/
+www/
+*.keystore
+*.p12
+android/app/google-services.json

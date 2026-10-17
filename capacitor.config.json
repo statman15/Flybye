@@ -1,0 +1,9 @@
+{
+  "appId": "com.statman15.flybye",
+  "appName": "Flybye",
+  "webDir": "www",
+  "plugins": {
+    "FirebaseAuthentication": { "skipNativeAuth": true, "providers": ["google.com"] },
+    "FirebaseMessaging": { "presentationOptions": ["alert", "sound"] }
+  }
+}

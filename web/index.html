@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Flybye">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<script>
+  // Android's installed app ignores theme-color's media attribute, so set one tag from the phone's mode.
+  (() => {
+    const dark = matchMedia('(prefers-color-scheme: dark)');
+    const tag = document.querySelector('meta[name="theme-color"]');
+    const set = () => { tag.content = dark.matches ? '#0c0c0d' : '#ffffff'; };
+    set();
+    dark.addEventListener('change', set);
+  })();
+</script>
+<title>Flybye</title>
+<style>
+  /* HypertroPhy's iPhone look (system font, follows the phone's light/dark), tinted sky blue. */
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --sheet: #f2f2f7; --group: #ffffff;
+    --label: #111113; --label2: #636366; --sep: rgba(60, 60, 67, .2);
+    --fill: rgba(118, 118, 128, .12); --fill-strong: rgba(118, 118, 128, .2);
+    --tint: #0a6cc4; --on-tint: #ffffff; --danger: #d70015; --good: #1a7f37;
+    --lift: rgba(20, 30, 40, .16);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0c0d; --sheet: #1c1c1e; --group: #2c2c2e;
+      --label: #f5f5f7; --label2: #a1a1a6; --sep: rgba(84, 84, 88, .6);
+      --fill: rgba(118, 118, 128, .24); --fill-strong: rgba(118, 118, 128, .36);
+      --tint: #64b5ff; --on-tint: #04213a; --danger: #ff6961; --good: #5dd37d;
+      --lift: rgba(0, 0, 0, .5);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; min-height: 100dvh; font-size: 17px; line-height: 1.3; color: var(--label); background: var(--bg);
+    padding-bottom: calc(110px + env(safe-area-inset-bottom)); -webkit-tap-highlight-color: transparent; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: 0; padding: 0; touch-action: manipulation; text-align: left; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+  .ic { width: 22px; height: 22px; flex: none; fill: currentColor; }
+
+  .head { padding: calc(16px + env(safe-area-inset-top)) 16px 4px; }
+  .head h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 41px; letter-spacing: .01em; }
+  .sub { margin: 0 0 8px; font-size: 15px; color: var(--label2); }
+  .pad { padding: 0 16px; }
+  .muted { color: var(--label2); font-size: 15px; }
+  .sec { margin: 24px 16px 8px; font-size: 22px; font-weight: 700; }
+  .sec small { display: block; font-size: 15px; font-weight: 400; color: var(--label2); }
+
+  .group { margin: 0 16px 12px; border-radius: 12px; background: var(--group); box-shadow: inset 0 0 0 .5px var(--sep); }
+  .card { padding: 14px 16px; }
+  .card.hit { box-shadow: 0 0 0 2px var(--tint); }
+  .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .city { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+  .price { font-size: 20px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .price small { font-size: 13px; font-weight: 400; color: var(--label2); }
+  .meta { margin: 4px 0 0; font-size: 15px; color: var(--label2); }
+  .deal { color: var(--good); font-weight: 600; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .tag { padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--label2); background: var(--fill); }
+  .tag.on { color: var(--on-tint); background: var(--tint); }
+  .pill { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 600; text-decoration: none; color: var(--on-tint); background: var(--tint); }
+  .pill:active { transform: scale(.97); opacity: .9; }
+  .pill.quiet { color: var(--tint); background: var(--fill); }
+  .pill.small { min-height: 36px; padding: 0 16px; margin-top: 10px; }
+  .pill:disabled { opacity: .5; }
+
+  .empty { display: grid; justify-items: center; gap: 6px; padding: 56px 32px; text-align: center; }
+  .empty h2 { margin: 0; font-size: 22px; }
+  .empty p { max-width: 32ch; margin: 0 0 12px; color: var(--label2); }
+  .err { color: var(--danger); }
+
+  /* Forms */
+  .form { display: grid; gap: 12px; padding: 14px 16px; }
+  .form label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--label2); }
+  .form input:not([type=checkbox]) { height: 44px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--fill); font-size: 17px; color: var(--label); }
+  .form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form .check { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; color: var(--label); }
+  .form .check input { width: 22px; height: 22px; accent-color: var(--tint); }
+  .kind + .kind { padding-top: 12px; box-shadow: inset 0 .5px 0 var(--sep); }
+  .seg { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--fill); margin-top: 10px; }
+  .seg button { flex: 1; min-height: 34px; border-radius: 8px; font-size: 15px; font-weight: 500; text-align: center; }
+  .seg button[aria-pressed=true] { font-weight: 600; background: var(--group); box-shadow: 0 2px 6px rgba(0, 0, 0, .12); }
+  button.tag { min-height: 32px; }
+  .remove { display: block; width: 100%; min-height: 44px; margin-top: 10px; border-radius: 10px; text-align: center; color: var(--danger); background: var(--fill); }
+
+  /* Calendar rows */
+  .rows { margin: 0 16px; padding: 0; list-style: none; }
+  .rows li { box-shadow: inset 0 -.5px 0 var(--sep); }
+  .rows button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; width: 100%; padding: 12px 0; }
+  .rows button:active { opacity: .6; }
+  .rows .t { font-weight: 600; overflow-wrap: anywhere; }
+  .rows .why { grid-column: 1 / -1; font-size: 14px; color: var(--label2); overflow-wrap: anywhere; }
+  .chip { align-self: start; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+  .chip.blocks { color: var(--on-tint); background: var(--tint); box-shadow: none; }
+
+  /* Tab bar: HypertroPhy's floating capsule. */
+  .dock { position: fixed; z-index: 3; left: 12px; right: 12px; bottom: max(10px, calc(env(safe-area-inset-bottom) - 12px)); max-width: 560px; margin: 0 auto; }
+  .tabs { display: flex; height: 64px; padding: 4px; border-radius: 999px; box-shadow: 0 10px 30px var(--lift), inset 0 0 0 .5px var(--sep);
+    background: color-mix(in srgb, var(--group) 72%, transparent); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); }
+  @media (prefers-reduced-transparency: reduce) { .tabs { background: var(--group); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+  .tabs button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    border-radius: 999px; font-size: 11px; font-weight: 600; text-align: center; color: var(--label2); }
+  .tabs button .ic { width: 25px; height: 25px; }
+  .tabs button[aria-selected=true] { color: var(--tint); background: var(--fill); }
+
+  #toast { position: fixed; z-index: 5; left: 16px; right: 16px; bottom: calc(100px + env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto; padding: 12px 16px;
+    border-radius: 14px; font-weight: 600; text-align: center; color: var(--on-tint); background: var(--tint); box-shadow: 0 10px 30px var(--lift); }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Material Icons (Apache-2.0): flight, star, event. Phosphor Icons 2.1.1 (MIT): gear. -->
+  <symbol id="i-trips" viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></symbol>
+  <symbol id="i-wish" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 256 256"><path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z"/></symbol>
+</svg>
+
+<main>
+  <section data-tab="gate" id="gate"><div class="empty"><p>Loading&hellip;</p></div></section>
+  <section data-tab="trips" id="trips" hidden></section>
+  <section data-tab="wish" id="wish" hidden></section>
+  <section data-tab="settings" id="settings" hidden></section>
+  <section data-tab="cal" id="cal" hidden></section>
+</main>
+
+<div id="toast" role="status" hidden></div>
+
+<nav class="dock" id="dock" hidden>
+  <div id="tabs" class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" data-go="trips" aria-selected="true"><svg class="ic" aria-hidden="true"><use href="#i-trips"/></svg>Trips</button>
+    <button role="tab" data-go="wish" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-wish"/></svg>Wish list</button>
+    <button role="tab" data-go="settings" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg>Settings</button>
+    <button role="tab" data-go="cal" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg>Calendar</button>
+  </div>
+</nav>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
