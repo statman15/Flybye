@@ -4,13 +4,9 @@ __pycache__/
 spike/out/
 .superpowers/
 *.egg-info/
-<<<<<<< HEAD
-=======
-!data/flybye.db
 node_modules/
 www/
 *.keystore
 *.p12
 android/app/google-services.json
->>>>>>> worktree-agent-aeea1fa1a09b2fb99
 .claude/
