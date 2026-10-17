@@ -1,6 +1,7 @@
 """Pure decisions: how many searches today, which windows, what's a deal, what to alert, how picks read."""
 import calendar
 import statistics
+import urllib.parse
 from datetime import date
 
 
@@ -89,12 +90,48 @@ def fmt_row(row, base, cfg):
             f" · {row['minutes'] // 60}h{row['minutes'] % 60:02d} {stops}{hotel}")
 
 
-def summary(rows, baselines, windows, cfg, new_labels):
-    """rows: latest price per (window, city) for windows that are still free. windows: id -> Window."""
+def flights_link(row, cfg):
+    q = f"Flights to {row['code']} from {cfg.get('home', 'ORD')} on {row['out']} through {row['ret']} nonstop"
+    return "https://www.google.com/travel/flights?q=" + urllib.parse.quote(q)
+
+
+def ranked(rows, baselines, windows, cfg):
+    """Rows of windows that are still free, best first."""
     scored = sorted(((score(r, baselines.get((r["code"], r["kind"])), windows[r["window_id"]], cfg), r)
                      for r in rows if r["window_id"] in windows), key=lambda x: -x[0])
-    wish = [r for _, r in scored if city_for(r["code"], cfg)][:3]
-    other = next((r for _, r in scored if not city_for(r["code"], cfg)), None)
+    return [r for _, r in scored]
+
+
+def top(ranked_rows, cfg):
+    """The 3 best wish-list rows and the best other one (the surprise)."""
+    wish = [r for r in ranked_rows if city_for(r["code"], cfg)][:3]
+    other = next((r for r in ranked_rows if not city_for(r["code"], cfg)), None)
+    return wish, other
+
+
+def _pick(r, baselines, cfg):
+    city = city_for(r["code"], cfg)
+    return {"code": r["code"], "name": city["name"] if city else r["name"], "price": r["price"],
+            "usual": baselines.get((r["code"], r["kind"])), "minutes": r["minutes"], "stops": r["stops"],
+            "hotel": r.get("hotel"), "airline": r.get("airline"), "wish": bool(city), "link": flights_link(r, cfg)}
+
+
+def suggestions(rows, baselines, windows, cfg, updated):
+    """The suggestions/current document the app shows."""
+    best = ranked(rows, baselines, windows, cfg)
+    wish, other = top(best, cfg)
+    out = []
+    for w in sorted(windows.values(), key=lambda w: w.out):
+        picks = [_pick(r, baselines, cfg) for r in best if r["window_id"] == w.id][:8]
+        if picks:
+            out.append({"id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "holiday": w.holiday, "picks": picks})
+    return {"updated": updated, "windows": out,
+            "top": [{**_pick(r, baselines, cfg), "window_id": r["window_id"]} for r in wish + ([other] if other else [])]}
+
+
+def summary(rows, baselines, windows, cfg, new_labels):
+    """rows: latest price per (window, city) for windows that are still free. windows: id -> Window."""
+    wish, other = top(ranked(rows, baselines, windows, cfg), cfg)
     lines = [fmt_row(r, baselines.get((r["code"], r["kind"])), cfg) for r in wish]
     if other:
         lines.append("Surprise: " + fmt_row(other, baselines.get((other["code"], other["kind"])), cfg))
