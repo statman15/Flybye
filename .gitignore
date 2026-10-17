@@ -3,6 +3,4 @@ __pycache__/
 *.key
 spike/out/
 .superpowers/
-*.db
 *.egg-info/
-!data/flybye.db

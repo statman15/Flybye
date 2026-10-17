@@ -1,6 +1,5 @@
-# Flybye settings. No secrets here: SERPAPI_KEY, ICAL_URL, GEMINI_KEY, NTFY_TOPIC come from GitHub Secrets.
+# Flybye settings (seeded into Firestore the first run; after that the app edits them there). No secrets here: SERPAPI_KEY, ICAL_URL, GEMINI_KEY come from GitHub Secrets.
 home: ORD
-db: data/flybye.db
 
 trips:                       # weeks = how far ahead the departure can be
   weekend: {enabled: true, weeks: [2, 10]}    # Fri -> Sun
@@ -34,4 +33,3 @@ score: {hour_penalty: 2, wish_bonus: 10, holiday_bonus: 5}
 ai:
   - {name: gemini, url: "https://generativelanguage.googleapis.com/v1beta/openai", key_env: GEMINI_KEY, model: gemini-2.5-flash}
 
-overrides: {}                # "Event title" or uid: block | ignore
