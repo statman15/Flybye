@@ -23,12 +23,11 @@ Do these once, in order. Nothing runs on the homelab, and no key or email ever g
    - `ICAL_URL`: Google Calendar → ⚙ → the shared calendar → Integrate calendar → Secret address in iCal format
    - `FIREBASE_SA`: the whole service-account JSON file
    - `GOOGLE_SERVICES_JSON`: the whole google-services.json file
-2. Create the signing key, as HypertroPhy does. Its output gives:
-   - `KEYSTORE_B64`
-   - `KEYSTORE_PASSWORD`
-   - the SHA-1 for step 2.3
+2. Create the APK signing key: `backend/.venv/Scripts/python tools/make-keystore.py`. It writes `~/flybye-keystore`, which holds:
+   - `release.p12.b64`: use it as `KEYSTORE_B64`
+   - `password.txt`: use it as `KEYSTORE_PASSWORD`
 
-   Keep the keystore in your password manager. Every future APK needs it.
+   It also prints the **SHA-1** for step 2.3. Back the folder up to your password manager. Every future APK must be signed with it, or updates won't install.
 
 ## 4. Phones
 - **Chris (Android):** install the APK from the repo's **Releases**, or add the repo to Obtainium. Sign in with Google, then Settings → **Turn on alerts**.
