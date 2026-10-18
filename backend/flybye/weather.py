@@ -9,10 +9,12 @@ from datetime import date, timedelta
 FORECAST = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 YEARS, FRESH_DAYS, WET_MM = 10, 180, 1.0
+# A 10-year archive request is slow; fill the shared 180-day cache a few cities per run instead of all at once.
+NEW_CITIES_PER_RUN = 15
 
 
 def http_get(url):
-    with urllib.request.urlopen(url, timeout=60) as r:
+    with urllib.request.urlopen(url, timeout=30) as r:
         return json.load(r)
 
 
@@ -30,7 +32,7 @@ class Weather:
     """One per space and run: remembers what it already asked for."""
 
     def __init__(self, st, today, get=http_get):
-        self.st, self.today, self.get, self.memo = st, today, get, {}
+        self.st, self.today, self.get, self.memo, self.fetched = st, today, get, {}, 0
 
     def of(self, row):
         """{kind: forecast|typical, hi_f, lo_f, rain_pct} for a priced row, or None."""
@@ -74,7 +76,9 @@ class Weather:
                 self.memo[key] = {"kind": "typical", **{k: c[k] for k in ("hi_f", "lo_f", "rain_pct")}}
             else:
                 self.memo[key] = None  # so a failed request isn't repeated for every row of this city
-                self._archive(code, lat, lon)
+                if self.fetched < NEW_CITIES_PER_RUN:
+                    self.fetched += 1
+                    self._archive(code, lat, lon)
         return self.memo.get(key)
 
     def _archive(self, code, lat, lon):

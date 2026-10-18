@@ -100,3 +100,12 @@ def test_a_failed_archive_request_is_not_repeated_for_every_row_of_the_city():
     for _ in range(5):
         wx.of(trip("2027-01-15", "2027-01-17"))
     assert len(calls) == 1
+
+
+def test_only_a_few_new_cities_are_looked_up_per_run_so_the_first_run_stays_quick():
+    from flybye import weather
+    net, st = Net(), new_store()
+    wx = Weather(st, TODAY, net)
+    got = [wx.of(trip("2027-01-15", "2027-01-17", code=f"C{i:02d}")) for i in range(weather.NEW_CITIES_PER_RUN + 5)]
+    assert len(net.urls) == weather.NEW_CITIES_PER_RUN                       # the rest wait for the next run
+    assert all(got[:weather.NEW_CITIES_PER_RUN]) and not any(got[weather.NEW_CITIES_PER_RUN:])
