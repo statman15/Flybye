@@ -12,7 +12,9 @@ FIX = pathlib.Path(__file__).parent / "fixtures"
 CFG = {
     "search": {"cap": 230, "adults": 2, "stops": 1, "long_areas": [None, "/m/02j9z", "/m/0j0k"], "confirm_per_run": 2},
     "alerts": {"deal_ratio": 0.8, "max_instant_per_week": 2, "repeat_drop": 0.9},
-    "score": {"hour_penalty": 2, "wish_bonus": 10, "holiday_bonus": 5},
+    "score": {"hour_penalty": 2, "wish_bonus": 10, "holiday_bonus": 5, "weather_bonus": 10, "airline_bonus": 8},
+    "airlines": {"prefer": ["UA"], "avoid": ["F9"]},
+    "weather": {"min_f": 65, "max_f": 85},
     "cities": [{"name": "Denver", "airports": ["DEN"], "trips": ["weekend", "3day", "long"]},
                {"name": "Miami", "airports": ["MIA", "FLL"], "trips": ["weekend", "3day", "long"]},
                {"name": "Porto", "airports": ["OPO"], "trips": ["long"], "stops": 2}],
@@ -21,10 +23,10 @@ WE = Window("weekend", date(2026, 11, 13), date(2026, 11, 15), None)
 LONG = Window("long", date(2027, 1, 16), date(2027, 1, 23), None)
 
 
-def row(code="DEN", price=400, window=WE, name="Denver", minutes=176):
+def row(code="DEN", price=400, window=WE, name="Denver", minutes=176, **extra):
     return {"window_id": window.id, "kind": window.kind, "out": str(window.out), "ret": str(window.ret), "code": code,
-            "name": name, "price": price, "hotel": 150, "minutes": minutes, "airline": "United", "stops": 0,
-            "source": "explore"}
+            "name": name, "price": price, "hotel": 150, "minutes": minutes, "airline": "United", "airline_code": "UA",
+            "lat": 39.8, "lon": -104.7, "stops": 0, "source": "explore", **extra}
 
 
 # --- budget ---------------------------------------------------------------------------------------------------
@@ -88,11 +90,44 @@ def test_should_alert_repeat_needs_ten_percent_drop():
 # --- score and text ----------------------------------------------------------------------------------------------
 def test_score_prefers_cheaper_shorter_wish_and_holiday():
     hol = Window("3day", date(2026, 11, 26), date(2026, 11, 29), "Thanksgiving")
-    s = pick.score(row(price=400), 500, WE, CFG)
-    assert s == 20 - 2 * 176 / 60 + 10
-    assert pick.score(row(code="BNA", price=400), 500, WE, CFG) == s - 10
-    assert pick.score(row(price=400), 500, hol, CFG) == s + 5
-    assert pick.score(row(price=400), None, WE, CFG) == pytest.approx(s - 20)
+    s = pick.score(row(price=400), 500, WE, CFG) - 8                 # minus the preferred-airline bonus
+    assert s == pytest.approx(20 - 2 * 176 / 60 + 10)
+    assert pick.score(row(code="BNA", price=400), 500, WE, CFG) - 8 == pytest.approx(s - 10)
+    assert pick.score(row(price=400), 500, hol, CFG) == s + 5 + 8
+    assert pick.score(row(price=400), None, WE, CFG) == pytest.approx(s - 20 + 8)
+
+
+def wx(hi, rain=0):
+    return {"kind": "forecast", "hi_f": hi, "lo_f": hi - 15, "rain_pct": rain}
+
+
+def test_score_parts_sum_to_the_total():
+    p = pick.parts(row(price=400, weather=wx(75, 20)), 500, WE, CFG)
+    assert p["total"] == pytest.approx(p["under_pct"] + p["hours"] + p["wish"] + p["holiday"] + p["weather"] + p["airline"])
+    assert p["hours"] == pytest.approx(-2 * 176 / 60) and p["airline"] == 8
+
+
+def test_weather_inside_range_is_a_bonus_and_rain_costs():
+    assert pick.parts(row(weather=wx(70)), None, WE, CFG)["weather"] == 10
+    assert pick.parts(row(weather=wx(70, 30)), None, WE, CFG)["weather"] == 7
+    assert pick.parts(row(weather=wx(85)), None, WE, CFG)["weather"] == 10      # edges count as inside
+
+
+def test_weather_outside_range_loses_a_point_per_degree_capped_at_twenty():
+    assert pick.parts(row(weather=wx(60)), None, WE, CFG)["weather"] == -5
+    assert pick.parts(row(weather=wx(90, 50)), None, WE, CFG)["weather"] == -10
+    assert pick.parts(row(weather=wx(20)), None, WE, CFG)["weather"] == -20
+
+
+def test_no_weather_means_no_weather_points():
+    assert pick.parts(row(), None, WE, CFG)["weather"] == 0
+
+
+def test_avoided_airlines_are_dropped_and_preferred_ranked_higher():
+    rows = [row("DEN", 400, name="Denver"), {**row("BNA", 400, name="Nashville"), "airline_code": "F9"},
+            {**row("ATL", 400, name="Atlanta"), "airline_code": "DL"}]
+    assert [r["code"] for r in pick.keep(rows, CFG)] == ["DEN", "ATL"]
+    assert pick.score(rows[0], None, WE, CFG) - pick.score(rows[2], None, WE, CFG) == 8 + 10   # prefer + wish
 
 
 def test_fmt_row():
@@ -123,7 +158,11 @@ def test_suggestions_doc_shape():
     assert set(first) == {"id", "kind", "out", "ret", "holiday", "picks"} and doc["windows"][1]["holiday"] == "Veterans Day"
     assert [p["code"] for p in first["picks"]][:2] == ["DEN", "FLL"]      # best first: wish cities lead
     p = next(p for p in first["picks"] if p["code"] == "DEN")
-    assert set(p) == {"code", "name", "price", "usual", "minutes", "stops", "hotel", "airline", "wish", "link"}
+    assert set(p) == {"code", "name", "price", "usual", "minutes", "stops", "hotel", "airline", "airline_code", "wish",
+                      "link", "weather", "score"}
+    assert p["weather"] is None and p["airline_code"] == "UA"
+    assert set(p["score"]) == {"total", "under_pct", "hours", "wish", "holiday", "weather", "airline"}
+    assert p["score"]["airline"] == 8 and p["score"]["wish"] == 10 and p["score"]["under_pct"] == 40.0
     assert p["usual"] == 500 and p["wish"] is True and p["name"] == "Denver"
     assert p["link"].startswith("https://www.google.com/travel/flights?q=") and "DEN" in p["link"]
     assert next(p for p in first["picks"] if p["code"] == "BNA")["usual"] is None
@@ -156,6 +195,7 @@ def test_explore_rows_and_search_logged():
     den = next(r for r in rows if r["code"] == "DEN")
     assert den["price"] == 410 and den["window_id"] == WE.id and den["stops"] == 0
     p = calls[0]
+    assert den["airline_code"] == "F9"
     assert p["engine"] == "google_travel_explore" and p["outbound_date"] == "2026-11-13" and p["stops"] == 1
     assert "arrival_area_id" not in p
     assert st.budget(f"{datetime.now():%Y-%m}")["used"] == 1
@@ -199,3 +239,19 @@ def test_unknown_baselines_cheapest_first_and_recently_confirmed_skipped():
 def test_empty_results_wording_also_means_empty():
     db = new_store()
     assert serp.explore(LONG, None, CFG, db, lambda p: {"error": 'Empty results for departure_id: "ORD".'}) == []
+
+
+def test_explore_rows_carry_coordinates_when_google_gives_them():
+    st = new_store()
+    data = json.loads((FIX / "explore.json").read_text())
+    data["destinations"][1]["gps_coordinates"] = {"latitude": 39.74, "longitude": -104.99}
+    rows = serp.explore(WE, None, CFG, st, lambda p: data)
+    den = next(r for r in rows if r["code"] == "DEN")
+    assert (den["lat"], den["lon"]) == (39.74, -104.99)
+    assert next(r for r in rows if r["code"] == "BNA")["lat"] is None
+
+
+def test_flights_row_gets_the_airline_code_from_the_flight_number():
+    st = new_store()
+    get, _ = fake_get("flights.json")
+    assert serp.flights(LONG, ["OPO"], 2, "Porto", CFG, st, get)["airline_code"] == "UA"

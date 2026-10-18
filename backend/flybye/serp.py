@@ -1,6 +1,5 @@
 """SerpApi calls. Every call is logged in the store so the monthly cap holds."""
 import json
-import os
 import re
 import urllib.error
 import urllib.parse
@@ -12,8 +11,8 @@ class Fatal(Exception):
     """Out of searches or a bad key: stop searching for today."""
 
 
-def http_get(params):
-    q = urllib.parse.urlencode({**params, "api_key": os.environ["SERPAPI_KEY"]})
+def http_get(params, key):
+    q = urllib.parse.urlencode({**params, "api_key": key})
     try:
         with urllib.request.urlopen("https://serpapi.com/search.json?" + q, timeout=120) as r:
             return json.load(r)
@@ -40,18 +39,20 @@ def _base(engine, w, cfg, **extra):
             "currency": "USD", "hl": "en", "gl": "us", **extra}
 
 
-def _row(w, code, name, price, hotel, minutes, airline, stops, source):
+def _row(w, code, name, price, hotel, minutes, airline, stops, source, airline_code=None, gps=None):
     return {"window_id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "code": code, "name": name,
-            "price": price, "hotel": hotel, "minutes": minutes, "airline": airline, "stops": stops, "source": source}
+            "price": price, "hotel": hotel, "minutes": minutes, "airline": airline, "airline_code": airline_code,
+            "lat": (gps or {}).get("latitude"), "lon": (gps or {}).get("longitude"), "stops": stops, "source": source}
 
 
-def explore(w, area, cfg, st, get=http_get):
+def explore(w, area, cfg, st, get):
     p = _base("google_travel_explore", w, cfg, travel_mode=1)
     if area:
         p["arrival_area_id"] = area
     d = _call(p, w.id, st, get)
     return [_row(w, x["destination_airport"]["code"], x["name"], x["flight_price"], x.get("hotel_price"),
-                 x.get("flight_duration", 0), x.get("airline"), x.get("number_of_stops", 0), "explore")
+                 x.get("flight_duration", 0), x.get("airline"), x.get("number_of_stops", 0), "explore",
+                 x.get("airline_code"), x.get("gps_coordinates"))
             for x in d.get("destinations", []) if x.get("flight_price") and x.get("destination_airport")]
 
 
@@ -59,16 +60,17 @@ def _itins(d):
     return d.get("best_flights", []) + d.get("other_flights", [])
 
 
-def flights(w, airports, stops, name, cfg, st, get=http_get):
+def flights(w, airports, stops, name, cfg, st, get):
     d = _call({**_base("google_flights", w, cfg), "arrival_id": ",".join(airports), "stops": stops}, w.id, st, get)
     best = min(_itins(d), key=lambda x: x["price"], default=None)
     if not best:
         return None
     return _row(w, airports[0], name, best["price"], None, best["total_duration"],
-                best["flights"][0]["airline"], len(best.get("layovers", [])), "flights")
+                best["flights"][0]["airline"], len(best.get("layovers", [])), "flights",
+                (best["flights"][0].get("flight_number") or "").split(" ")[0] or None)
 
 
-def confirm(row, cfg, st, get=http_get):
+def confirm(row, cfg, st, get):
     from .pick import city_for
     from .windows import Window
     w = Window(row["kind"], datetime.fromisoformat(row["out"]).date(), datetime.fromisoformat(row["ret"]).date(), None)
