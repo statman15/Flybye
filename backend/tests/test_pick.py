@@ -245,6 +245,9 @@ def test_explore_rows_carry_coordinates_when_google_gives_them():
     st = new_store()
     data = json.loads((FIX / "explore.json").read_text())
     data["destinations"][1]["gps_coordinates"] = {"latitude": 39.74, "longitude": -104.99}
+    for x in data["destinations"]:
+        if x.get("destination_airport", {}).get("code") == "BNA":
+            x.pop("gps_coordinates", None)  # a city Google gives no coordinates for
     rows = serp.explore(WE, None, CFG, st, lambda p: data)
     den = next(r for r in rows if r["code"] == "DEN")
     assert (den["lat"], den["lon"]) == (39.74, -104.99)

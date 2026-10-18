@@ -14,7 +14,11 @@
    "flight_duration": 183,
    "number_of_stops": 0,
    "airline": "American",
-   "airline_code": "AA"
+   "airline_code": "AA",
+   "gps_coordinates": {
+    "latitude": 26.1224386,
+    "longitude": -80.1373174
+   }
   },
   {
    "destination_id": "/m/02cl1",
@@ -30,7 +34,11 @@
    "flight_duration": 176,
    "number_of_stops": 0,
    "airline": "Frontier",
-   "airline_code": "F9"
+   "airline_code": "F9",
+   "gps_coordinates": {
+    "latitude": 39.7392358,
+    "longitude": -104.990251
+   }
   },
   {
    "destination_id": "/m/05jbn",
@@ -46,7 +54,11 @@
    "flight_duration": 94,
    "number_of_stops": 0,
    "airline": "American",
-   "airline_code": "AA"
+   "airline_code": "AA",
+   "gps_coordinates": {
+    "latitude": 36.1626638,
+    "longitude": -86.7816016
+   }
   },
   {
    "destination_id": "/m/0rj0z",
@@ -62,7 +74,11 @@
    "flight_duration": 183,
    "number_of_stops": 0,
    "airline": "American",
-   "airline_code": "AA"
+   "airline_code": "AA",
+   "gps_coordinates": {
+    "latitude": 26.1224386,
+    "longitude": -80.1373174
+   }
   },
   {
    "destination_id": "/m/07ypt",

@@ -151,3 +151,24 @@ def test_ci_log_is_per_space_counts_only(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert out.startswith("space abc123: ") and "free window" in out and "event" in out
     assert "Secret Name" not in out and "someone@example.com" not in out and "Work offsite" not in out and "2026-11" not in out
+
+
+def test_explore_rows_carry_real_gps_coordinates():
+    from flybye import serp
+    from flybye.windows import Window
+    import json, pathlib
+    data = json.loads((pathlib.Path(__file__).parent / "fixtures" / "explore.json").read_text())
+    w = Window("weekend", date(2026, 11, 13), date(2026, 11, 15), None)
+    rows = serp.explore(w, None, CFG, fresh(), lambda p: data)
+    den = next(r for r in rows if r["code"] == "DEN")
+    assert abs(den["lat"] - 39.7) < 0.5 and abs(den["lon"] + 105.0) < 0.5
+
+
+def test_a_new_space_without_calendars_still_gets_default_settings():
+    fs = FakeFS()
+    fs.collection("spaces").document("new").set({"name": "new", "owner": "o@x.test", "members": ["o@x.test"]})
+    main.run_all(fs, "daily", date(2026, 10, 17))
+    st = new_store("new", fs)
+    s = st._get("settings", "main", None)
+    assert s and s["weather"] == {"min_f": 65, "max_f": 85} and s["airlines"] == {"prefer": [], "avoid": []}
+    assert "Add a calendar in Settings" in " ".join(st.activity()["errors"])
