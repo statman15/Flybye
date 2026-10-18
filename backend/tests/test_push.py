@@ -17,7 +17,7 @@ def bad(exc):
 def test_send_fans_out_to_every_device_with_data_and_link():
     st = new_store()
     for t in ("a", "b"):
-        st.fs.collection("devices").document(t).set({"platform": "web"})
+        st._set("devices", t, {"platform": "web"})
     seen = []
 
     def fan(msgs):
@@ -33,7 +33,7 @@ def test_send_fans_out_to_every_device_with_data_and_link():
 def test_dead_tokens_are_pruned_but_other_failures_keep_the_device():
     st = new_store()
     for t in ("live", "gone", "junk", "flaky"):
-        st.fs.collection("devices").document(t).set({"platform": "web"})
+        st._set("devices", t, {"platform": "web"})
     answers = {"live": ok(), "gone": bad(messaging.UnregisteredError("x")),
                "junk": bad(exceptions.InvalidArgumentError("x")), "flaky": bad(exceptions.UnavailableError("x"))}
     push.send(st, "T", "B", fan=lambda msgs: SimpleNamespace(responses=[answers[m.token] for m in msgs]))
