@@ -1,4 +1,4 @@
-# Flybye settings (seeded into Firestore the first run; after that the app edits them there). No secrets here: SERPAPI_KEY, ICAL_URL, GEMINI_KEY come from GitHub Secrets.
+# Flybye settings (seeded into Firestore the first run; after that the app edits them there). No secrets here: each space keeps its own SerpApi and Gemini keys and calendar links in Firestore (the app edits them).
 home: ORD
 
 trips:                       # weeks = how far ahead the departure can be
@@ -28,9 +28,12 @@ alerts:
   max_instant_per_week: 2
   repeat_drop: 0.9           # same trip again only if 10% cheaper than last alert
 
-score: {hour_penalty: 2, wish_bonus: 10, holiday_bonus: 5}
+score: {hour_penalty: 2, wish_bonus: 10, holiday_bonus: 5, weather_bonus: 10, airline_bonus: 8}
+
+airlines: {prefer: [], avoid: []}   # IATA codes: avoided airlines are hidden, preferred ones rank higher
+weather: {min_f: 65, max_f: 85}      # ideal daytime highs, degrees F
 
 ai:
-  - {name: gemini, url: "https://generativelanguage.googleapis.com/v1beta/openai", key_env: GEMINI_KEY, model: gemini-flash-latest}
-  - {name: gemini-pinned, url: "https://generativelanguage.googleapis.com/v1beta/openai", key_env: GEMINI_KEY, model: gemini-3.8-flash}
+  - {name: gemini, url: "https://generativelanguage.googleapis.com/v1beta/openai", model: gemini-flash-latest}
+  - {name: gemini-pinned, url: "https://generativelanguage.googleapis.com/v1beta/openai", model: gemini-3.8-flash}
 
