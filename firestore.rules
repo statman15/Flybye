@@ -1,40 +1,70 @@
 rules_version = '2';
-// Paste into Firebase console -> Firestore -> Rules. The two allowed Google accounts live in allow/{email}: lowercase email as the doc ID, created by hand, never in git.
-// The daily job uses the Admin SDK, which ignores these rules.
+// Paste into Firebase console -> Firestore -> Rules (v2: per-space data).
+// Every space lists its people in spaces/{sid}.members (lowercase emails). Admins are docs in admins/{email}, created by hand, never in git.
+// The daily job uses the Admin SDK, which ignores these rules. The times Worker reads and writes as the signed-in user, so these rules apply to it too.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function ok() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && exists(/databases/$(database)/documents/allow/$(request.auth.token.email.lower()));
+    function signed() { return request.auth != null && request.auth.token.email_verified == true; }
+    function mail() { return request.auth.token.email.lower(); }
+    function isAdmin() { return signed() && exists(/databases/$(database)/documents/admins/$(mail())); }
+    function member(sid) { return signed() && mail() in get(/databases/$(database)/documents/spaces/$(sid)).data.members; }
+
+    // A user reads only their own admin doc, so the app can tell whether to show Admin.
+    match /admins/{email} {
+      allow get: if signed() && mail() == email;
     }
 
-    match /settings/{id} {
-      allow read, write: if ok();
+    // Listing needs the caller in members (the app queries members array-contains). Admins also list, create and remove spaces.
+    // The owner may change members and name only, and cannot drop themself.
+    match /spaces/{sid} {
+      allow get, list: if signed() && (mail() in resource.data.members || isAdmin());
+      allow create: if isAdmin() && request.resource.data.owner in request.resource.data.members;
+      allow update: if signed() && mail() == resource.data.owner
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'name'])
+        && resource.data.owner in request.resource.data.members;
+      allow delete: if isAdmin();
+
+      // Keys and calendar links: members only. An admin may delete (when removing a space) but never read.
+      match /private/{id} {
+        allow read, write: if member(sid);
+        allow delete: if isAdmin();
+      }
+
+      match /settings/{id} {
+        allow read, write: if member(sid);
+      }
+
+      match /suggestions/{id} { allow read: if member(sid); }
+      match /latest/{id} { allow read: if member(sid); }
+      match /routes/{id} { allow read: if member(sid); }
+
+      // The app may only change `override`; everything else on a label belongs to the job.
+      match /labels/{id} {
+        allow read: if member(sid);
+        allow update: if member(sid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['override'])
+          && (request.resource.data.override == null || request.resource.data.override is bool);
+      }
+
+      // The job owns meta. The one exception: the times lookup (done as the user) bumps budget.used by exactly 2.
+      match /meta/{id} {
+        allow read: if member(sid);
+        allow update: if id == 'budget' && member(sid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used'])
+          && request.resource.data.used == resource.data.used + 2;
+      }
+
+      // A phone writes its own push token. Update is allowed too, so tapping "Turn on alerts" twice (or a token refresh) doesn't fail.
+      match /devices/{token} {
+        allow create, update: if member(sid) && request.resource.data.email == mail();
+        allow delete: if member(sid) && resource.data.email == mail();
+      }
     }
 
-    match /suggestions/{id} {
-      allow read: if ok();
-    }
-
-    // The app may only change `override`; everything else on a label belongs to the job.
-    match /labels/{id} {
-      allow read: if ok();
-      allow update: if ok()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['override'])
-        && (request.resource.data.override == null || request.resource.data.override is bool);
-    }
-
-    // A phone writes its own push token. Update is allowed too, so tapping "Turn on alerts" twice (or a token refresh) doesn't fail.
-    match /devices/{token} {
-      allow create, update: if ok() && request.resource.data.email == request.auth.token.email;
-      allow delete: if ok();
-    }
-
-    // Read only your own doc, so the app can tell "signed in but not allowed".
-    match /allow/{email} {
-      allow get: if request.auth != null && request.auth.token.email.lower() == email;
+    // The shared weather cache is for the job only.
+    match /climate/{id} {
+      allow read, write: if false;
     }
   }
 }
