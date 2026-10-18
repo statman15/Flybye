@@ -98,7 +98,7 @@ def test_cheap_confirmed_wish_city_sends_one_alert_with_app_link():
     run(date(2026, 10, 17), f, st)
     assert 1 <= len(f.sent) <= 2
     title, msg, data, link = f.sent[0]
-    assert "Flybye" in title and set(data) == {"window_id", "code"}
+    assert "Flybye" in title and data == {"window_id": data["window_id"], "code": data["code"], "space": "s1"}
     assert link == f"https://app.test/Flybye/#trip={data['window_id']}%7C{data['code']}&space=s1"
     assert len(st.alerts()) == len(f.sent)
 
