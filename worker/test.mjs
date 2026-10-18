@@ -45,7 +45,7 @@ const settings = fs({ home: { stringValue: "ORD" }, search: { mapValue: { fields
 const keys = fs({ serpapi: { stringValue: "SECRETKEY" } });
 const L = (id, t, n) => ({ airline: "United", flight_number: n, duration: 100, departure_airport: { id, time: t }, arrival_airport: { id: "X", time: t } });
 
-function mk({ deny = false, serpErr = null, empty = false } = {}) {
+function mk({ deny = false, serpErr = null, empty = false, budget = null } = {}) {
   const calls = [];
   const f = async (url, init = {}) => {
     url = String(url); calls.push({ url, init });
@@ -53,6 +53,8 @@ function mk({ deny = false, serpErr = null, empty = false } = {}) {
     if (url.includes("firestore.googleapis.com") && url.endsWith(":commit")) return new Response("{}");
     if (url.includes("firestore.googleapis.com")) {
       if (deny) return new Response("{}", { status: 403 });
+      if (url.endsWith("/meta/budget")) return budget ? new Response(JSON.stringify(fs({ month: { stringValue: budget.month }, used: { integerValue: String(budget.used) } })))
+        : new Response("{}", { status: 404 });
       return new Response(JSON.stringify(url.endsWith("/settings/main") ? settings : keys));
     }
     if (url.startsWith("https://serpapi.com/")) {
@@ -101,6 +103,16 @@ r = await call(req({}, undefined, await live()), mk({ serpErr: "Invalid API key.
 assert.equal(r.status, 502);
 assert.ok(!(await r.text()).includes("SECRETKEY"));
 assert.equal((await call(req({ window_id: "x" }, undefined, await live()), mk())).status, 400);
+
+// the space's monthly search cap (settings.search.cap, default 230) is checked before spending 2 searches
+const month = new Date().toISOString().slice(0, 7);
+const capped = mk({ budget: { month, used: 229 } });
+assert.equal((await call(req({}, undefined, await live()), capped)).status, 429);
+assert.ok(!capped.calls.some((c) => c.url.startsWith("https://serpapi.com/")));
+assert.equal((await call(req({}, undefined, await live()), mk({ budget: { month, used: 228 } }))).status, 200);
+assert.equal((await call(req({}, undefined, await live()), mk({ budget: { month: "2000-01", used: 999 } }))).status, 200); // last month's count
+assert.equal((await call(req({}, undefined, await live()), mk())).status, 200); // no budget doc yet
+assert.equal((await call(req({ window_id: "weekend:2026-99-99:2026-11-15" }, undefined, await live()), mk())).status, 400);
 
 // CORS at the handler
 assert.equal((await call(req({}, "https://evil.example", await live()), mk())).status, 403);

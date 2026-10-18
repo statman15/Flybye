@@ -55,7 +55,7 @@ const stubs = {
 
 const KEYS = { serpapi: 'sk-secret', gemini: 'gk-secret', calendars: [{ name: 'Chris <i>', url: 'https://calendar.google.com/calendar/ical/secret-token/basic.ics' }] };
 const pick = (extra = {}) => ({ code: 'DEN', name: 'Denver <b>', price: 240, usual: 400, minutes: 165, stops: 0, hotel: 130, airline: 'United', airline_code: 'UA', wish: true, link: 'https://www.google.com/travel/flights?q=x',
-  weather: { kind: 'forecast', hi_f: 78.4, lo_f: 64, rain_pct: 20 }, score: { total: 51.5, under_pct: 40, hours: 2.75, wish: 15, holiday: 0, weather: 8, airline: 8 }, ...extra });
+  weather: { kind: 'forecast', hi_f: 78.4, lo_f: 64, rain_pct: 20 }, score: { total: 65.5, under_pct: 40, hours: -5.5, wish: 15, holiday: 0, weather: 8, airline: 8 }, ...extra });
 const seed = () => ({
   'admins/admin@example.test': {},
   'spaces/s1': { name: 'Home <u>', owner: 'test@example.test', members: ['test@example.test', 'laura@example.test'], created: '2026-10-18T00:00:00Z' },
@@ -138,7 +138,7 @@ try {
     await click(page, '#trips [data-act=rank]');
     await page.waitForFunction(() => !document.querySelector('#trips .rank').hidden);
     const r = await page.$eval('#trips .rank', el => el.textContent);
-    if (!/Price vs usual\s*\+40/.test(r) || !/Flight time \(2\.8 h\)\s*−5\.5/.test(r) || !/Weather\s*\+8/.test(r) || !/Score\s*51\.5/.test(r)) throw new Error('rank breakdown: ' + r);
+    if (!/Price vs usual\s*\+40/.test(r) || !/Flight time\s*−5\.5/.test(r) || !/Weather\s*\+8/.test(r) || !/Score\s*65\.5/.test(r)) throw new Error('rank breakdown: ' + r);
   });
 
   await run('trip details: Worker times, cached 6h', async () => {

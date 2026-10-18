@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS = { home: 'ORD',
 const AIRPORT = /^[A-Z]{3}$/, IATA = /^[A-Z0-9]{2}$/, EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Session state: who is signed in, which spaces they are in, and the one they are looking at.
-let me = '', isAdmin = false, spaces = [], S = null, tab = 'trips', sugg = null, scoreCfg = {}, tripKey = '', armed = '';
+let me = '', isAdmin = false, spaces = [], S = null, tab = 'trips', sugg = null, tripKey = '', armed = '';
 const sref = (...p) => doc(db, 'spaces', S.sid, ...p);
 const settingsRef = () => sref('settings', 'main');
 const keysRef = () => sref('private', 'keys');
@@ -119,7 +119,7 @@ const acts = {
     if (armed !== el.dataset.sid) { armed = el.dataset.sid; el.textContent = 'Tap again to remove'; return; }
     armed = '';
     await act(async () => {
-      await deleteDoc(doc(db, 'spaces', el.dataset.sid, 'private', 'keys')).catch(() => {}); // keys go too; the rest becomes unreachable with the space doc
+      await deleteDoc(doc(db, 'spaces', el.dataset.sid, 'private', 'keys')); // keys first: the rules refuse the space delete while they exist
       await deleteDoc(doc(db, 'spaces', el.dataset.sid));
     });
   },
@@ -235,8 +235,8 @@ function wxLine(w) {
 const pts = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(Math.round(n * 10) / 10);
 function rankHtml(sc) {
   if (!sc || !Number.isFinite(sc.total)) return '';
-  const pen = Number.isFinite(scoreCfg.hour_penalty) && Number.isFinite(sc.hours) ? -scoreCfg.hour_penalty * sc.hours : null;
-  const rows = [['Price vs usual', sc.under_pct], [`Flight time${Number.isFinite(sc.hours) ? ` (${Math.round(sc.hours * 10) / 10} h)` : ''}`, pen],
+  // Every part is already signed points from the job (hours = -hour_penalty x flight hours), so the rows add up to the score.
+  const rows = [['Price vs usual', sc.under_pct], ['Flight time', sc.hours],
     ['Wish list', sc.wish], ['Holiday', sc.holiday], ['Weather', sc.weather], ['Preferred airline', sc.airline]]
     .filter(([, v]) => Number.isFinite(v) && v !== 0);
   return `<div class="rank" hidden>${rows.map(([l, v]) => `<p><span>${esc(l)}</span><b>${esc(pts(v))}</b></p>`).join('')}<p class="total"><span>Score</span><b>${esc(Math.round(sc.total * 10) / 10)}</b></p></div>`;
@@ -257,8 +257,7 @@ function pickCard(p, w, tag = '') {
 
 async function renderTrips() {
   const el = $('#trips');
-  const [snap, set] = await Promise.all([getDoc(sref('suggestions', 'current')), getDoc(settingsRef())]);
-  scoreCfg = set.exists() ? set.data().score || {} : {};
+  const snap = await getDoc(sref('suggestions', 'current'));
   if (!snap.exists()) {
     sugg = null;
     el.innerHTML = `<div class="head"><h1>Trips</h1><p class="sub">${esc(S.name)}</p></div><div class="empty"><h2>No suggestions yet</h2><p>The daily search writes them every morning.</p></div>`;

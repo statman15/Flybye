@@ -115,3 +115,12 @@ def test_climate_is_shared_and_not_under_a_space():
     st.set_climate("DEN", "03", {"hi_f": 50, "lo_f": 25, "rain_pct": 10, "years": 10, "at": "2026-10-01"})
     assert st.climate("DEN", "03")["hi_f"] == 50 and st.climate("DEN", "04") is None
     assert "climate/DEN_03" in fs.data
+
+
+def test_devices_of_people_no_longer_in_the_space_are_dropped():
+    st, fs = make()
+    fs.collection("spaces").document(st.sid).set({"members": ["a@x.test"]})
+    st._set("devices", "tok-a", {"platform": "web", "email": "A@x.test"})
+    st._set("devices", "tok-gone", {"platform": "android", "email": "removed@x.test"})
+    assert st.device_tokens() == ["tok-a"]
+    assert [d.id for d in st._col("devices").stream()] == ["tok-a"]

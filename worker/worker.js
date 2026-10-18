@@ -44,7 +44,8 @@ export async function verifyToken(token, projectId, fetchFn = fetch, now = Date.
 // "weekend:2026-11-13:2026-11-15" -> {out, ret}
 export function parseWindow(id) {
   const m = /^[a-z0-9_]+:(\d{4}-\d\d-\d\d):(\d{4}-\d\d-\d\d)$/.exec(id || "");
-  if (!m) throw new HttpError(400, "bad window_id");
+  const real = (d) => !isNaN(Date.parse(d + "T00:00:00Z")) && new Date(d + "T00:00:00Z").toISOString().slice(0, 10) === d;
+  if (!m || !real(m[1]) || !real(m[2])) throw new HttpError(400, "bad window_id");
   return { out: m[1], ret: m[2] };
 }
 
@@ -108,6 +109,12 @@ export async function times(req, env, fetchFn = fetch) {
   const settings = await readDoc(base, `spaces/${sid}/settings/main`, token, fetchFn);
   const key = (await readDoc(base, `spaces/${sid}/private/keys`, token, fetchFn)).serpapi;
   if (!key) throw new HttpError(404, "no SerpApi key in this space");
+
+  // Two searches per lookup come out of the space's monthly cap, the same one the daily job respects.
+  const r = await fetchFn(`${base}/spaces/${sid}/meta/budget`, { headers: { authorization: "Bearer " + token } });
+  const budget = r.ok ? fromFields((await r.json()).fields) : {};
+  const used = budget.month === new Date().toISOString().slice(0, 7) ? Number(budget.used) || 0 : 0;
+  if (used + 2 > (settings.search?.cap ?? 230)) throw new HttpError(429, "this month's searches are used up");
 
   const to = code.toUpperCase();
   const city = (settings.cities || []).find((c) => (c.airports || []).includes(to));

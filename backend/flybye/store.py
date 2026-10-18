@@ -130,7 +130,17 @@ class Store:
         self._set("suggestions", "current", doc)
 
     def device_tokens(self):
-        return [s.id for s in self._col("devices").stream()]
+        """Tokens of current members only: someone removed from the space stops getting its pushes (and their token goes)."""
+        snap = self.space.get()
+        members = {m.lower() for m in (snap.to_dict() or {}).get("members", [])} if snap.exists else None
+        keep = []
+        for d in self._col("devices").stream():
+            email = ((d.to_dict() or {}).get("email") or "").lower()
+            if members is not None and email not in members:
+                self.drop_token(d.id)
+            else:
+                keep.append(d.id)
+        return keep
 
     def drop_token(self, token):
         self._col("devices").document(token).delete()

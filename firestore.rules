@@ -23,9 +23,11 @@ service cloud.firestore {
       allow update: if signed() && mail() == resource.data.owner
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'name'])
         && resource.data.owner in request.resource.data.members;
-      allow delete: if isAdmin();
+      // Only once its keys are gone, so an admin can't delete and re-create a space as themself to read someone's keys.
+      allow delete: if isAdmin() && !exists(/databases/$(database)/documents/spaces/$(sid)/private/keys);
 
-      // Keys and calendar links: members only. An admin may delete (when removing a space) but never read.
+      // Keys and calendar links: members only. An admin may delete them (when removing a space) but can't read them.
+      // Admins are still trusted: they can see every space's name and members.
       match /private/{id} {
         allow read, write: if member(sid);
         allow delete: if isAdmin();
@@ -34,7 +36,10 @@ service cloud.firestore {
       // An admin may write only the first settings doc, in the same batch that creates the space (get() sees the pre-write state, so they are not a member yet).
       match /settings/{id} {
         allow read, write: if member(sid);
-        allow create: if isAdmin();
+        // The admin writes a new space's first settings in the same batch that creates the space.
+        allow create: if isAdmin() && id == 'main'
+          && !exists(/databases/$(database)/documents/spaces/$(sid))
+          && existsAfter(/databases/$(database)/documents/spaces/$(sid));
       }
 
       match /suggestions/{id} { allow read: if member(sid); }

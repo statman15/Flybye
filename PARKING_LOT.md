@@ -26,3 +26,13 @@
 - **The app's "usual" price includes today's price; the alert's doesn't.** So the "% under usual" shown can be a bit smaller than what triggered the alert.
 - **A search error mid-sweep can leave `latest/{window}` holding only part of that window's results.**
 - **`firebase-admin` warns that `Message.token` is deprecated (use `fid`).** Pinned below 8 for now; switch before upgrading.
+
+## Known gaps (M3 review, 2026-10-18)
+- **No automated test of `firestore.rules`.** Everything was checked by reading only. Add Firebase emulator tests for cross-space reads, admin limits and the budget +2 rule.
+- **Space settings aren't range-checked by the job.** A direct Firestore write could set `weeks` past 52 or a huge `cap`, which slows that space's own run. Clamp them in `load_cfg`.
+- **Removing a space leaves its labels, devices and suggestions behind**, unreachable but never deleted. A job-side cleanup of spaces whose doc is gone would fix it.
+- **Labels and `latest/*` grow forever.** Prune labels for events more than 90 days old, and drop latest docs for windows that have passed.
+- **Migration crash windows.** A crash between copying data and writing the space doc leaves an orphan copy. A crash during deletion leaves some v1 docs behind. Make it resumable if it's ever needed again.
+- **Worker details.** It returns 401 instead of 503 when Google's signing keys can't be fetched, doesn't refetch keys early on an unknown key id, and reports a missing settings doc as 403.
+- **The job re-reads `private/keys` several times per run, and `log_search` does a read plus a write per search.** Cheap to tidy if the Firestore reads ever matter.
+- **The app's `DEFAULT_SETTINGS` starts new spaces with an empty wish list.** That's intended, but the comment says it mirrors config.yaml.
