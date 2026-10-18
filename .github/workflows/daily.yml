@@ -1,13 +1,13 @@
 name: Daily sweep
 
-# Every morning: test, then calendar -> free windows -> SerpApi -> Firestore + push.
+# Every morning: test, then for each space: its calendars -> free windows -> its SerpApi searches -> Firestore + push.
 on:
   schedule:
     - cron: "0 13 * * *"   # 08:00 Chicago in summer, 07:00 in winter; GitHub may start it a few minutes late
   workflow_dispatch:
     inputs:
       command:
-        description: "daily | windows | summary | test-notify"
+        description: "daily | windows | summary | test-notify | migrate (one time: v1 data into a space)"
         default: daily
 
 permissions:
@@ -26,14 +26,23 @@ jobs:
           python-version: "3.12"
       - run: pip install -q "./backend[test]"
       - run: python -m pytest -q backend/tests
-      - run: python -m flybye "$CMD"
+      - name: Run for every space
+        if: ${{ (inputs.command || 'daily') != 'migrate' }}
+        run: python -m flybye "$CMD"
         env:
           CMD: ${{ inputs.command || 'daily' }}
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          APP_URL: https://statman15.github.io/Flybye/
+      # The old single-user keys are only for the one-time move into the first space; after that each space keeps its own.
+      - name: Migrate v1 data
+        if: ${{ inputs.command == 'migrate' }}
+        run: python tools/migrate_v1.py
+        env:
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           ICAL_URL: ${{ secrets.ICAL_URL }}
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
-          APP_URL: https://statman15.github.io/Flybye/
       # GitHub switches off scheduled workflows in a public repo after 60 days without commits.
       # Re-enabling through the API resets that clock, so the morning sweep never silently stops.
       - name: Keep the schedule alive
