@@ -8,5 +8,7 @@ export const firebaseConfig = {
   messagingSenderId: '1011095385650',
   appId: '1:1011095385650:web:83727ebc2746adb7f4ae2b',
 };
+// The times Worker (Cloudflare). A public URL, not a secret. 'REPLACE_ME' until it is deployed: trip details then fall back to Google Flights.
+export const TIMES_URL = 'REPLACE_ME';
 // Firebase console -> Project settings -> Cloud Messaging -> Web Push certificates -> Key pair (the public half).
 export const VAPID_KEY = 'BPtYPRGXghGf8nJ4Ub1xMQfXYZY0DOGY-E-XuoULF8bmXMxUNSePER-3SHnRhVE6W0-cdqjh-0eUVmFXWLL03c0';

@@ -3,14 +3,14 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut }
   from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc }
+import { getFirestore, doc, getDoc, getDocs, collection, query, where, writeBatch, setDoc, updateDoc, deleteDoc }
   from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { firebaseConfig, VAPID_KEY } from './firebase-config.js';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export { onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc };
+export { onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, doc, getDoc, getDocs, collection, query, where, writeBatch, setDoc, updateDoc, deleteDoc };
 
 // Web push token for the home-screen web app (permission is already granted by the caller). Returns null when this browser can't do web push.
 export async function webPushToken(registration) {
