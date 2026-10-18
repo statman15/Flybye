@@ -18,7 +18,8 @@ const server = http.createServer(async (req, res) => {
   if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
   let body;
   try { body = await readFile(file); } catch { res.writeHead(404).end(); return; }
-  if (configured && file.endsWith('firebase-config.js')) body = body.toString().replace("TIMES_URL = ''", `TIMES_URL = '${origin}/times'`);
+  // The real Worker is never called: point the app at the local fake, or at nothing for the "not set up" case.
+  if (file.endsWith('firebase-config.js')) body = body.toString().replace(/TIMES_URL = '[^']*'/, `TIMES_URL = '${configured ? origin + '/times' : ''}'`);
   res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream' }).end(body);
 }).listen(0);
 await new Promise(r => server.once('listening', r));
