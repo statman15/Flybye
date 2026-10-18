@@ -31,5 +31,6 @@ alerts:
 score: {hour_penalty: 2, wish_bonus: 10, holiday_bonus: 5}
 
 ai:
-  - {name: gemini, url: "https://generativelanguage.googleapis.com/v1beta/openai", key_env: GEMINI_KEY, model: gemini-2.5-flash}
+  - {name: gemini, url: "https://generativelanguage.googleapis.com/v1beta/openai", key_env: GEMINI_KEY, model: gemini-flash-latest}
+  - {name: gemini-pinned, url: "https://generativelanguage.googleapis.com/v1beta/openai", key_env: GEMINI_KEY, model: gemini-3.8-flash}
 
