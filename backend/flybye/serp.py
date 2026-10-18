@@ -27,7 +27,7 @@ def _call(params, window_id, st, get):
     err = d.get("error")
     if not err:
         return d
-    if "hasn't returned any results" in err:
+    if "hasn't returned any results" in err or err.startswith("Empty results"):
         return {}
     if re.search(r"run out|api key|account", err, re.I):
         raise Fatal(err)

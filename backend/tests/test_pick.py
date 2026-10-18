@@ -194,3 +194,8 @@ def test_unknown_baselines_cheapest_first_and_recently_confirmed_skipped():
     rows = [row("DEN", 500), row("FLL", 300, name="Miami"), row("DEN", 200, window=LONG)]
     got = pick.deal_candidates(rows, {}, CFG, recent={f"{LONG.id}|DEN"})
     assert [(r["code"], r["price"]) for r in got] == [("FLL", 300), ("DEN", 500)]
+
+
+def test_empty_results_wording_also_means_empty():
+    db = new_store()
+    assert serp.explore(LONG, None, CFG, db, lambda p: {"error": 'Empty results for departure_id: "ORD".'}) == []
