@@ -45,3 +45,27 @@ def test_all_day_runs_midnight_to_midnight_local():
 def test_utc_converted_to_chicago():
     e = next(e for e in parse(ICS, START, END) if e.uid == "utc@x")
     assert e.start.tzinfo is not None and e.start.astimezone(TZ).hour == 9 and not e.free
+
+
+import pytest
+
+from flybye.cal import safe_url
+
+
+@pytest.mark.parametrize("url", ["file:///etc/passwd", "http://calendar.google.com/x.ics", "ftp://x.test/a",
+                                 "https://127.0.0.1/a.ics", "https://169.254.169.254/latest", "https://10.0.0.5/a.ics",
+                                 "https://localhost/a.ics", "https:///nohost"])
+def test_unsafe_calendar_links_are_refused(url):
+    with pytest.raises(ValueError):
+        safe_url(url, resolve=lambda h: ["127.0.0.1"] if h == "localhost" else [h])
+
+
+def test_webcal_becomes_https_and_public_hosts_pass():
+    pub = lambda h: ["142.250.190.46"]
+    assert safe_url("webcal://p01-caldav.icloud.com/x", resolve=pub) == "https://p01-caldav.icloud.com/x"
+    assert safe_url("https://calendar.google.com/calendar/ical/a/b/basic.ics", resolve=pub).startswith("https://calendar.google.com")
+
+
+def test_a_host_that_resolves_to_a_private_address_is_refused():
+    with pytest.raises(ValueError):
+        safe_url("https://evil.test/a.ics", resolve=lambda h: ["192.168.1.11"])
