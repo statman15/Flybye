@@ -62,7 +62,13 @@ Each one ends with something we both use.
    - Pages deploy and the APK release, as in HypertroPhy.
    - Then make the repo public again.
    - *Done when:* we both sign in, see real suggestions, flip a label, edit the wish list, and get a push.
-3. **Weather.** Open-Meteo forecast and typical weather in the score, the trip cards and the pushes.
+3. **Spaces, weather, airlines, flight times, Activity (decided 2026-10-18).** Plan: `docs/superpowers/plans/2026-10-18-m3-spaces-weather-times.md`.
+   - **Spaces.** Every person gets their own space: their calendars (one or more, a trip is free only if all are free), airport, wish list, airlines, weather range, and their own SerpApi and Gemini keys. The owner can let a partner in. An admin (Chris) creates spaces.
+   - **Airlines.** A prefer list (ranks higher) and an avoid list (hidden).
+   - **Weather.** Each space sets an ideal high-temperature range. Trips within 16 days use the forecast; later ones use the typical weather (10-year average). It's shown on cards and used in the ranking.
+   - **Flight times.** Instant on tap, through a free Cloudflare Worker that holds no secrets and acts as the user. Costs 2 searches per trip opened.
+   - **Activity screen.** Runs, searches left, dates checked, errors, and why each trip ranks where it does.
+   - *Done when:* Chris's brother can be invited and set up his own space, and both phones show weather, airline and times.
 
 ## Secrets (GitHub Secrets, never in git)
 
