@@ -68,11 +68,34 @@ def should_alert(row, confirm, sent, today, cfg):
     return not before or price <= cfg["alerts"]["repeat_drop"] * min(before)
 
 
-def score(row, base, w, cfg):
+def _weather_points(wx, cfg):
+    """Daytime high inside the space's range is a bonus; each degree outside costs a point (20 at most); rain costs more."""
+    if not wx:
+        return 0
+    lo, hi = cfg["weather"]["min_f"], cfg["weather"]["max_f"]
+    out = max(lo - wx["hi_f"], wx["hi_f"] - hi, 0)
+    return (cfg["score"]["weather_bonus"] if out == 0 else -min(20, out)) - wx["rain_pct"] / 10
+
+
+def parts(row, base, w, cfg):
+    """The score as points per reason; total is their sum (the app shows these as 'why this rank')."""
     s = cfg["score"]
-    pct = (base - row["price"]) / base * 100 if base else 0
-    return (pct - s["hour_penalty"] * row["minutes"] / 60 + (s["wish_bonus"] if city_for(row["code"], cfg) else 0)
-            + (s["holiday_bonus"] if w.holiday else 0))
+    p = {"under_pct": (base - row["price"]) / base * 100 if base else 0,
+         "hours": -s["hour_penalty"] * row["minutes"] / 60,
+         "wish": s["wish_bonus"] if city_for(row["code"], cfg) else 0,
+         "holiday": s["holiday_bonus"] if w.holiday else 0,
+         "weather": _weather_points(row.get("weather"), cfg),
+         "airline": s["airline_bonus"] if row.get("airline_code") in cfg["airlines"]["prefer"] else 0}
+    return {"total": sum(p.values()), **p}
+
+
+def score(row, base, w, cfg):
+    return parts(row, base, w, cfg)["total"]
+
+
+def keep(rows, cfg):
+    """Rows of airlines the space doesn't avoid."""
+    return [r for r in rows if r.get("airline_code") not in cfg["airlines"]["avoid"]]
 
 
 def _d(iso):
@@ -109,11 +132,13 @@ def top(ranked_rows, cfg):
     return wish, other
 
 
-def _pick(r, baselines, cfg):
+def _pick(r, baselines, windows, cfg):
     city = city_for(r["code"], cfg)
+    why = parts(r, baselines.get((r["code"], r["kind"])), windows[r["window_id"]], cfg)
     return {"code": r["code"], "name": city["name"] if city else r["name"], "price": r["price"],
             "usual": baselines.get((r["code"], r["kind"])), "minutes": r["minutes"], "stops": r["stops"],
-            "hotel": r.get("hotel"), "airline": r.get("airline"), "wish": bool(city), "link": flights_link(r, cfg)}
+            "hotel": r.get("hotel"), "airline": r.get("airline"), "airline_code": r.get("airline_code"), "wish": bool(city),
+            "link": flights_link(r, cfg), "weather": r.get("weather"), "score": {k: round(v, 1) for k, v in why.items()}}
 
 
 def suggestions(rows, baselines, windows, cfg, updated):
@@ -122,11 +147,11 @@ def suggestions(rows, baselines, windows, cfg, updated):
     wish, other = top(best, cfg)
     out = []
     for w in sorted(windows.values(), key=lambda w: w.out):
-        picks = [_pick(r, baselines, cfg) for r in best if r["window_id"] == w.id][:8]
+        picks = [_pick(r, baselines, windows, cfg) for r in best if r["window_id"] == w.id][:8]
         if picks:
             out.append({"id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "holiday": w.holiday, "picks": picks})
     return {"updated": updated, "windows": out,
-            "top": [{**_pick(r, baselines, cfg), "window_id": r["window_id"]} for r in wish + ([other] if other else [])]}
+            "top": [{**_pick(r, baselines, windows, cfg), "window_id": r["window_id"]} for r in wish + ([other] if other else [])]}
 
 
 def summary(rows, baselines, windows, cfg, new_labels):

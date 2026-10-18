@@ -1,4 +1,4 @@
-"""Firestore: settings, AI labels, prices, searches spent, alerts, suggestions, devices. The only module that talks to it."""
+"""Firestore, one space at a time: everything lives under spaces/{sid}. The only module that talks to it."""
 import hashlib
 import json
 import os
@@ -20,19 +20,45 @@ def connect():
     import firebase_admin
     from firebase_admin import credentials, firestore
     firebase_admin.initialize_app(credentials.Certificate(json.loads(os.environ["FIREBASE_SA"])))
-    return Store(firestore.client())
+    return firestore.client()
 
 
 class Store:
-    def __init__(self, fs, now=lambda: datetime.now(TZ)):
-        self.fs, self.now = fs, now
+    def __init__(self, fs, sid, now=lambda: datetime.now(TZ)):
+        self.fs, self.sid, self.now = fs, sid, now
+        self.space = fs.collection("spaces").document(sid)
+
+    @staticmethod
+    def spaces(fs):
+        return [s.id for s in fs.collection("spaces").stream()]
+
+    def _col(self, col):
+        return self.space.collection(col)
 
     def _get(self, col, id, default):
-        s = self.fs.collection(col).document(id).get()
+        s = self._col(col).document(id).get()
         return s.to_dict() if s.exists else default
 
     def _set(self, col, id, data, merge=False):
-        self.fs.collection(col).document(id).set(data, merge=merge)
+        self._col(col).document(id).set(data, merge=merge)
+
+    def keys(self):
+        """The space's own SerpApi and Gemini keys and its calendar links."""
+        return self._get("private", "keys", {})
+
+    def activity(self):
+        return self._get("meta", "activity", {})
+
+    def set_activity(self, doc):
+        self._set("meta", "activity", doc)
+
+    def climate(self, code, mm):
+        """Typical weather for a city and month; shared by all spaces, so it lives at the top."""
+        s = self.fs.collection("climate").document(f"{code}_{mm}").get()
+        return s.to_dict() if s.exists else None
+
+    def set_climate(self, code, mm, doc):
+        self.fs.collection("climate").document(f"{code}_{mm}").set(doc)
 
     def settings(self, seed):
         """The app edits settings/main; the first run seeds it from config.yaml."""
@@ -50,7 +76,7 @@ class Store:
         self._set("labels", label_id(key), {"key": key, **fields}, merge=True)
 
     def labels_since(self, since):
-        return sorted((s.to_dict() for s in self.fs.collection("labels").stream() if s.to_dict()["at"] > since),
+        return sorted((s.to_dict() for s in self._col("labels").stream() if s.to_dict()["at"] > since),
                       key=lambda l: l["at"])
 
     def budget(self, month):
@@ -104,7 +130,7 @@ class Store:
         self._set("suggestions", "current", doc)
 
     def device_tokens(self):
-        return [s.id for s in self.fs.collection("devices").stream()]
+        return [s.id for s in self._col("devices").stream()]
 
     def drop_token(self, token):
-        self.fs.collection("devices").document(token).delete()
+        self._col("devices").document(token).delete()

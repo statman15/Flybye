@@ -1,4 +1,4 @@
-"""A tiny in-memory stand-in for the Firestore client: just the calls store.py makes."""
+"""A tiny in-memory stand-in for the Firestore client: just the calls the code makes. Documents live in one flat dict by path."""
 import copy
 
 
@@ -15,28 +15,33 @@ class Snap:
 
 
 class Doc:
-    def __init__(self, docs, id):
-        self.docs, self.id = docs, id
+    def __init__(self, fs, path):
+        self.fs, self.path, self.id = fs, path, path.rsplit("/", 1)[-1]
 
     def get(self):
-        return Snap(self.id, self.docs.get(self.id))
+        return Snap(self.id, self.fs.data.get(self.path))
 
     def set(self, data, merge=False):
-        self.docs[self.id] = {**self.docs.get(self.id, {}), **copy.deepcopy(data)} if merge else copy.deepcopy(data)
+        self.fs.data[self.path] = {**self.fs.data.get(self.path, {}), **copy.deepcopy(data)} if merge else copy.deepcopy(data)
 
     def delete(self):
-        self.docs.pop(self.id, None)
+        self.fs.data.pop(self.path, None)
+
+    def collection(self, name):
+        return Collection(self.fs, f"{self.path}/{name}")
 
 
 class Collection:
-    def __init__(self, docs):
-        self.docs = docs
+    def __init__(self, fs, path):
+        self.fs, self.path = fs, path
 
     def document(self, id):
-        return Doc(self.docs, id)
+        return Doc(self.fs, f"{self.path}/{id}")
 
     def stream(self):
-        return [Snap(i, d) for i, d in list(self.docs.items())]
+        n = self.path.count("/") + 2
+        return [Snap(p.rsplit("/", 1)[-1], d) for p, d in list(self.fs.data.items())
+                if p.startswith(self.path + "/") and p.count("/") + 1 == n]
 
 
 class FakeFS:
@@ -44,9 +49,13 @@ class FakeFS:
         self.data = {}
 
     def collection(self, name):
-        return Collection(self.data.setdefault(name, {}))
+        return Collection(self, name)
+
+    def docs(self, path):
+        """id -> data of one collection, for asserting in tests."""
+        return {s.id: s.to_dict() for s in self.collection(path).stream()}
 
 
-def new_store():
+def new_store(sid="s1", fs=None):
     from flybye.store import Store
-    return Store(FakeFS())
+    return Store(fs or FakeFS(), sid)
