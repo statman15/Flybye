@@ -31,8 +31,10 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
 
+      // An admin may write only the first settings doc, in the same batch that creates the space (get() sees the pre-write state, so they are not a member yet).
       match /settings/{id} {
         allow read, write: if member(sid);
+        allow create: if isAdmin();
       }
 
       match /suggestions/{id} { allow read: if member(sid); }

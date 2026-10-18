@@ -23,7 +23,7 @@ self.addEventListener('fetch', e => {
 
 self.addEventListener('push', e => {
   const p = e.data?.json() ?? {}, n = p.notification ?? {}, d = p.data ?? {};
-  const link = p.fcmOptions?.link || (d.window_id ? `${registration.scope}#trip=${d.window_id}|${d.code}` : registration.scope);
+  const link = p.fcmOptions?.link || (d.window_id ? `${registration.scope}#trip=${d.window_id}|${d.code}${d.space ? '&space=' + d.space : ''}` : registration.scope);
   e.waitUntil(registration.showNotification(n.title || 'Flybye', { body: n.body || '', icon: 'icon-192.png', data: { link } }));
 });
 
