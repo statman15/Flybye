@@ -7,6 +7,7 @@ Writes release.p12, release.p12.b64 (paste into the KEYSTORE_B64 GitHub secret) 
 future APKs can't install over the old one.
 """
 import base64
+import os
 import datetime as dt
 import pathlib
 import secrets
@@ -19,7 +20,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 
 out = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else pathlib.Path.home() / "flybye-keystore")
-out.mkdir(parents=True, exist_ok=True)
+out.mkdir(parents=True, exist_ok=True, mode=0o700)
 if (out / "release.p12").exists():
     sys.exit(f"{out / 'release.p12'} already exists; not overwriting")
 
@@ -32,8 +33,13 @@ cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_ke
 password = secrets.token_urlsafe(24)
 p12 = pkcs12.serialize_key_and_certificates(b"flybye", key, cert, None,
                                             serialization.BestAvailableEncryption(password.encode()))
-(out / "release.p12").write_bytes(p12)
-(out / "release.p12.b64").write_text(base64.b64encode(p12).decode())
-(out / "password.txt").write_text(password)
+def write_secret(path, data):  # owner-only on POSIX; on Windows the home folder is already private to you
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
+        f.write(data)
+
+
+write_secret(out / "release.p12", p12)
+write_secret(out / "release.p12.b64", base64.b64encode(p12))
+write_secret(out / "password.txt", password.encode())
 print(f"Wrote keystore to {out}. Alias: flybye")
 print("SHA-1 for Firebase (Android app):", cert.fingerprint(hashes.SHA1()).hex(":").upper())
