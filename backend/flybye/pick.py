@@ -138,7 +138,8 @@ def _pick(r, baselines, windows, cfg):
     return {"code": r["code"], "name": city["name"] if city else r["name"], "price": r["price"],
             "usual": baselines.get((r["code"], r["kind"])), "minutes": r["minutes"], "stops": r["stops"],
             "hotel": r.get("hotel"), "airline": r.get("airline"), "airline_code": r.get("airline_code"), "wish": bool(city),
-            "link": flights_link(r, cfg), "weather": r.get("weather"), "score": {k: round(v, 1) for k, v in why.items()}}
+            "link": flights_link(r, cfg), "weather": r.get("weather"), "score": {k: round(v, 1) for k, v in why.items()},
+            "country": r.get("country")}
 
 
 def suggestions(rows, baselines, windows, cfg, updated):
@@ -147,7 +148,10 @@ def suggestions(rows, baselines, windows, cfg, updated):
     wish, other = top(best, cfg)
     out = []
     for w in sorted(windows.values(), key=lambda w: w.out):
-        picks = [_pick(r, baselines, windows, cfg) for r in best if r["window_id"] == w.id][:8]
+        mine = [r for r in best if r["window_id"] == w.id]
+        # every wish-list city, then a few of the best others (Explore lists ~50 places per window)
+        keep = [r for r in mine if city_for(r["code"], cfg)] + [r for r in mine if not city_for(r["code"], cfg)][:3]
+        picks = [_pick(r, baselines, windows, cfg) for r in keep]
         if picks:
             out.append({"id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "holiday": w.holiday, "picks": picks})
     return {"updated": updated, "windows": out,

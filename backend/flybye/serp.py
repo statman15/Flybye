@@ -39,10 +39,11 @@ def _base(engine, w, cfg, **extra):
             "currency": "USD", "hl": "en", "gl": "us", **extra}
 
 
-def _row(w, code, name, price, hotel, minutes, airline, stops, source, airline_code=None, gps=None):
+def _row(w, code, name, price, hotel, minutes, airline, stops, source, airline_code=None, gps=None, country=None):
     return {"window_id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "code": code, "name": name,
             "price": price, "hotel": hotel, "minutes": minutes, "airline": airline, "airline_code": airline_code,
-            "lat": (gps or {}).get("latitude"), "lon": (gps or {}).get("longitude"), "stops": stops, "source": source}
+            "lat": (gps or {}).get("latitude"), "lon": (gps or {}).get("longitude"), "stops": stops, "source": source,
+            "country": country}
 
 
 def explore(w, area, cfg, st, get):
@@ -52,7 +53,7 @@ def explore(w, area, cfg, st, get):
     d = _call(p, w.id, st, get)
     return [_row(w, x["destination_airport"]["code"], x["name"], x["flight_price"], x.get("hotel_price"),
                  x.get("flight_duration", 0), x.get("airline"), x.get("number_of_stops", 0), "explore",
-                 x.get("airline_code"), x.get("gps_coordinates"))
+                 x.get("airline_code"), x.get("gps_coordinates"), x.get("country"))
             for x in d.get("destinations", []) if x.get("flight_price") and x.get("destination_airport")]
 
 

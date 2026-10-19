@@ -159,7 +159,7 @@ def test_suggestions_doc_shape():
     assert [p["code"] for p in first["picks"]][:2] == ["DEN", "FLL"]      # best first: wish cities lead
     p = next(p for p in first["picks"] if p["code"] == "DEN")
     assert set(p) == {"code", "name", "price", "usual", "minutes", "stops", "hotel", "airline", "airline_code", "wish",
-                      "link", "weather", "score"}
+                      "link", "weather", "score", "country"}
     assert p["weather"] is None and p["airline_code"] == "UA"
     assert set(p["score"]) == {"total", "under_pct", "hours", "wish", "holiday", "weather", "airline"}
     assert p["score"]["airline"] == 8 and p["score"]["wish"] == 10 and p["score"]["under_pct"] == 40.0
@@ -170,10 +170,12 @@ def test_suggestions_doc_shape():
     assert len(doc["top"]) == 4 and sum(t["wish"] for t in doc["top"]) == 3
 
 
-def test_suggestions_keep_at_most_eight_picks_per_window():
+def test_suggestions_keep_every_wish_city_and_only_three_others_per_window():
     rows = [row(f"X{i:02d}", 100 + i, name=f"City{i}") for i in range(12)]
-    doc = pick.suggestions(rows, {}, {WE.id: WE}, CFG, "t")
-    assert len(doc["windows"][0]["picks"]) == 8 and doc["top"][0]["price"] == 100 and len(doc["top"]) == 1
+    rows += [row("DEN", 2000), row("FLL", 1900, name="Miami")]          # pricey, but on the wish list
+    picks = pick.suggestions(rows, {}, {WE.id: WE}, CFG, "t")["windows"][0]["picks"]
+    assert {p["code"] for p in picks[:2]} == {"FLL", "DEN"} and all(p["wish"] for p in picks[:2])
+    assert [p["code"] for p in picks[2:]] == ["X00", "X01", "X02"]
 
 
 # --- serp parsing (real response shapes from the 2026-10-17 spike) -------------------------------------------------
@@ -258,3 +260,9 @@ def test_flights_row_gets_the_airline_code_from_the_flight_number():
     st = new_store()
     get, _ = fake_get("flights.json")
     assert serp.flights(LONG, ["OPO"], 2, "Porto", CFG, st, get)["airline_code"] == "UA"
+
+
+def test_explore_rows_carry_the_country():
+    get, _ = fake_get("explore.json")
+    rows = serp.explore(WE, None, CFG, new_store(), get)
+    assert {r["country"] for r in rows} == {"United States"}
