@@ -273,13 +273,29 @@ async function renderTrips() {
   }
   const s = sugg = snap.data();
   const top = (s.top || []).map(p => pickCard(p, windowOf(s, p.window_id) || { id: p.window_id }, p.wish ? '' : 'Surprise'));
-  const wins = (s.windows || []).map(w => `<h2 class="sec">${esc(KINDS[w.kind] || w.kind)}<small>${esc(day(w.out))} → ${esc(day(w.ret))}${w.holiday ? ' · ' + esc(w.holiday) : ''}</small></h2>
-    ${(w.picks || []).map(p => pickCard(p, w)).join('') || '<p class="pad muted">No fares found for these dates yet.</p>'}`);
+  // Sections by trip type (native <details>, closed until tapped); longer trips split at the border.
+  const abroad = p => (p.country || '') !== 'United States';
+  const sections = [['weekend', 'Weekends', () => true], ['3day', '3-day weekends', () => true],
+    ['long', 'Longer trips', p => !abroad(p)], ['long', 'Longer trips · International', abroad]];
+  const body = sections.map(([kind, title, keep], i) => {
+    const wins = (s.windows || []).filter(w => w.kind === kind)
+      .map(w => ({ w, picks: (w.picks || []).filter(keep) })).filter(x => x.picks.length);
+    if (!wins.length) return '';
+    const html = wins.map(({ w, picks }) => {
+      const mine = picks.filter(p => p.wish), others = picks.filter(p => !p.wish);
+      return `<h2 class="sec">${esc(day(w.out))} → ${esc(day(w.ret))}${w.holiday ? `<small>${esc(w.holiday)}</small>` : ''}</h2>
+        ${mine.map(p => pickCard(p, w)).join('') || '<p class="pad muted">No wish-list city flies nonstop on these dates.</p>'}
+        ${others.length ? `<details class="more"><summary>Other cities (${others.length})</summary>${others.map(p => pickCard(p, w)).join('')}</details>` : ''}`;
+    }).join('');
+    return `<details class="kind" data-sec="${i}"${openSecs.has(i) ? ' open' : ''}><summary>${esc(title)} <small>${wins.length} date${wins.length > 1 ? 's' : ''}</small></summary>${html}</details>`;
+  }).join('');
   el.innerHTML = `<div class="head"><h1>Trips</h1><p class="sub">${esc(S.name)} · updated ${esc(s.updated ? toDate(s.updated).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'never')}</p></div>
-    ${top.length ? `<h2 class="sec">Top picks</h2>${top.join('')}` : ''}${wins.join('')}`;
+    ${top.length ? `<h2 class="sec">Top picks</h2>${top.join('')}` : ''}${body || '<div class="empty"><p>No priced trips fit your free dates yet.</p></div>'}`;
   highlight();
 }
 const windowOf = (s, id) => (s?.windows || []).find(w => w.id === id);
+const openSecs = new Set(); // which sections stay open across refreshes
+$('#trips').addEventListener('toggle', ev => { const i = Number(ev.target.dataset?.sec); if (!Number.isNaN(i)) ev.target.open ? openSecs.add(i) : openSecs.delete(i); }, true);
 $('#trips').addEventListener('click', ev => {
   if (ev.target.closest('a, [data-act]')) return;
   const card = ev.target.closest('[data-trip]');
@@ -293,7 +309,7 @@ function highlight() {
   if (!want) return;
   const hits = [...document.querySelectorAll('[data-trip]')].filter(c => c.dataset.trip === want);
   document.querySelectorAll('.card.hit').forEach(c => c.classList.remove('hit'));
-  hits.forEach(c => c.classList.add('hit'));
+  hits.forEach(c => { c.classList.add('hit'); for (let d = c.closest('details'); d; d = d.parentElement.closest('details')) d.open = true; });
   hits[0]?.scrollIntoView({ block: 'center' });
 }
 async function route() {

@@ -297,6 +297,25 @@ try {
     await text(page, '#cal', 'Dentist');
   });
 
+  await run('trips: sections by trip type, international split, other cities tucked away', async () => {
+    await page.evaluate(() => {
+      const s = window.__fake.docs['spaces/s1/suggestions/current'];
+      s.windows.push({ id: 'long:2027-01-16:2027-01-23', kind: 'long', out: '2027-01-16', ret: '2027-01-23', holiday: null, picks: [
+        { ...s.windows[0].picks[0], code: 'MIA', name: 'Miami', country: 'United States' },
+        { ...s.windows[0].picks[0], code: 'CDG', name: 'Paris', country: 'France' },
+        { ...s.windows[0].picks[0], code: 'ATL', name: 'Atlanta', country: 'United States', wish: false }] });
+    });
+    await dockTab(page, 'wish'); await dockTab(page, 'trips');
+    await text(page, '#trips', 'Longer trips · International');
+    const secs = await page.$$eval('#trips details.kind', ds => ds.map(d => ({ t: d.querySelector('summary').textContent, open: d.open, cities: [...d.querySelectorAll(':scope > .card .city, :scope > .group .city')].map(c => c.textContent), more: [...d.querySelectorAll('details.more .city')].map(c => c.textContent) })));
+    const by = t => secs.find(s => s.t.startsWith(t));
+    if (secs.some(s => s.open)) throw new Error('sections should start closed');
+    if (by('Weekends')?.t.includes('1 date') !== true) throw new Error('weekend section: ' + JSON.stringify(secs));
+    const dom = secs.find(s => s.t.startsWith('Longer trips') && !s.t.includes('International')), intl = by('Longer trips · International');
+    if (!dom.cities.includes('Miami') || dom.cities.includes('Paris') || !dom.more.includes('Atlanta') || dom.cities.includes('Atlanta')) throw new Error('domestic long: ' + JSON.stringify(dom));
+    if (!intl.cities.includes('Paris') || intl.cities.includes('Miami')) throw new Error('international: ' + JSON.stringify(intl));
+  });
+
   await run('pull down to refresh', async () => {
     await dockTab(page, 'trips');
     await text(page, '#trips', 'Top picks');
