@@ -65,6 +65,7 @@
   .card { padding: 14px 16px; }
   .card.hit { box-shadow: 0 0 0 2px var(--tint); }
   .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .card-top > :first-child { min-width: 0; overflow-wrap: anywhere; } .card-top > button { flex: none; }
   .city { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
   .price { font-size: 20px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .price small { font-size: 13px; font-weight: 400; color: var(--label2); }
@@ -86,9 +87,10 @@
 
   /* Forms */
   .form { display: grid; gap: 12px; padding: 14px 16px; }
-  .form label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--label2); }
+  .form label { min-width: 0; display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--label2); }
   .form input:not([type=checkbox]) { height: 44px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--fill); font-size: 17px; color: var(--label); }
-  .form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .form input:not([type=checkbox]), .form select { width: 100%; min-width: 0; } /* a field's built-in width must not push the card off-screen */
   .form .check { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; color: var(--label); }
   .form .check input { width: 22px; height: 22px; accent-color: var(--tint); }
   .kind + .kind { padding-top: 12px; box-shadow: inset 0 .5px 0 var(--sep); }
@@ -116,6 +118,7 @@
   .tabs button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     border-radius: 999px; font-size: 11px; font-weight: 600; text-align: center; color: var(--label2); }
   .tabs button .ic { width: 25px; height: 25px; }
+  .tabs button { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } /* large text: labels shorten, the dock stays on screen */
   .tabs button[aria-selected=true] { color: var(--tint); background: var(--fill); }
 
   /* Cards with actions, trip details, activity, setup */

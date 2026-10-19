@@ -297,6 +297,25 @@ try {
     await text(page, '#cal', 'Dentist');
   });
 
+  await run('no sideways scroll at phone width', async () => {
+    await page.setViewport({ width: 360, height: 780, isMobile: true, hasTouch: true }); // a narrow Android phone
+    await page.addStyleTag({ content: 'input, select, button, p, span, label, h2, h3 { font-size: 130% !important; }' }); // Android 'larger text'
+    await page.evaluate(() => { const k = window.__fake.docs['spaces/s1/private/keys']; k.calendars.push({ name: 'Work calendar with a long name', url: 'https://calendar.google.com/calendar/ical/' + 'x'.repeat(60) + '%40group.calendar.google.com/private-' + 'a'.repeat(32) + '/basic.ics' });
+      const s = window.__fake.docs['spaces/s1']; s.members.push('someone.with.a.very.long.address@example-domain.test'); });
+    for (const tab of ['trips', 'wish', 'settings', 'cal', 'activity']) {
+      await dockTab(page, tab);
+      await page.waitForFunction(t => !document.querySelector('#' + t)?.hidden, {}, tab);
+      const wide = await page.evaluate(() => {
+        // 360, not innerWidth: a phone zooms out to fit overflow, so innerWidth grows with the bug
+        const out = [...document.querySelectorAll('body *')].filter(e => e.offsetParent && e.getBoundingClientRect().right > 361);
+        return !out.length ? null : out
+          .slice(0, 5).map(e => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${[...e.classList].join('.')} (${Math.round(e.getBoundingClientRect().right)}px)`);
+      });
+      if (wide) throw new Error(`${tab} scrolls sideways: ${wide.join(', ')}`);
+      if (process.env.SHOT && tab === 'settings') await page.screenshot({ path: process.env.SHOT, fullPage: true });
+    }
+  });
+
   await run('push link (opens the right space)', async () => {
     page = await open({ email: 'multi@example.test' }, '#trip=w1|DEN&space=s1', d => { d['spaces/s1'].members.push('multi@example.test'); return d; });
     await page.waitForFunction(() => document.querySelector('.card.hit')).catch(async e => { throw new Error(e.message + ' ' + (await page.evaluate(() => document.body.innerText.slice(0, 200)))); });
