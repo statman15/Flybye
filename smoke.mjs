@@ -297,6 +297,17 @@ try {
     await text(page, '#cal', 'Dentist');
   });
 
+  await run('pull down to refresh', async () => {
+    await dockTab(page, 'trips');
+    await text(page, '#trips', 'Top picks');
+    await page.evaluate(() => { window.__fake.docs['spaces/s1/suggestions/current'].updated = '2026-10-18T06:00:00-05:00'; window.__fake.docs['spaces/s1/suggestions/current'].top[0].name = 'Pulled City'; });
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.touchscreen.touchStart(180, 150);
+    for (const y of [190, 240, 290]) await page.touchscreen.touchMove(180, y);
+    await page.touchscreen.touchEnd();
+    await text(page, '#trips', 'Pulled City');
+  });
+
   await run('no sideways scroll at phone width', async () => {
     await page.setViewport({ width: 360, height: 780, isMobile: true, hasTouch: true }); // a narrow Android phone
     await page.addStyleTag({ content: 'input, select, button, p, span, label, h2, h3 { font-size: 130% !important; }' }); // Android 'larger text'

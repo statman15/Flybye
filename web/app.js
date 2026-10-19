@@ -96,6 +96,14 @@ async function go(t) {
   scrollTo(0, 0);
 }
 
+// Pull down from the top of a tab to reload it (phones have no reload button in a home-screen app).
+let pullY = null;
+addEventListener('touchstart', e => { pullY = scrollY <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null; }, { passive: true });
+addEventListener('touchend', e => {
+  if (pullY !== null && e.changedTouches[0].clientY - pullY > 100 && !$('#gate:not([hidden])')) { toast('Refreshing…'); refresh(); }
+  pullY = null;
+}, { passive: true });
+
 // One click handler for every button that does something, one submit handler for every form.
 const acts = {
   signin: async () => { try { await signIn(); } catch (e) { if (!/cancel|closed-by-user|popup-closed/i.test(`${e.code} ${e.message}`)) gateSignIn(e.message); } },
