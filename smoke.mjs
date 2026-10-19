@@ -19,6 +19,7 @@ const server = http.createServer(async (req, res) => {
   let body;
   try { body = await readFile(file); } catch { res.writeHead(404).end(); return; }
   // The real Worker is never called: point the app at the local fake, or at nothing for the "not set up" case.
+  if (file.endsWith('version.js') && apkVersion) body = `export const VERSION = '${apkVersion}';`;
   if (file.endsWith('firebase-config.js')) body = body.toString().replace(/TIMES_URL = '[^']*'/, `TIMES_URL = '${configured ? origin + '/times' : ''}'`);
   res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream' }).end(body);
 }).listen(0);
@@ -73,7 +74,7 @@ const seed = () => ({
   'spaces/s3/settings/main': { home: 'MDW', trips: {}, cities: [] },
 });
 
-let workerMode = 'ok', workerHits = 0, configured = true;
+let workerMode = 'ok', workerHits = 0, configured = true, apkVersion = '';
 const TIMES = { outbound: [{ airline: 'United <b>', flight_number: 'UA 123', dep: '2026-11-06 07:30', arr: '2026-11-06 09:15', from: 'ORD', to: 'DEN', duration: 165 }],
   return: [{ airline: 'United', flight_number: 'UA 456', dep: '2026-11-08 18:00', arr: '2026-11-08 21:40', from: 'DEN', to: 'ORD', duration: '2h 40m' }], price: 240, booking_link: 'https://www.google.com/travel/flights?q=book' };
 
@@ -94,6 +95,9 @@ try {
         if (r.headers().authorization !== 'Bearer fake-id-token' || JSON.parse(r.postData()).sid !== 's1') errors.push('Worker call missing token or space id');
         return workerMode === 'ok' ? r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(TIMES) }) : r.respond({ status: 500, body: 'nope' });
       }
+      if (r.url() === 'https://api.github.com/repos/statman15/Flybye/releases/latest' && apkVersion) // only the APK asks
+        return r.respond({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+          body: JSON.stringify({ tag_name: 'v1.0.10', assets: [{ name: 'Flybye-1.0.10.apk', browser_download_url: 'https://github.com/statman15/Flybye/releases/download/v1.0.10/Flybye-1.0.10.apk' }] }) });
       if (r.url().startsWith(origin) || r.url().startsWith('data:')) return r.continue();
       errors.push(`unexpected outside request: ${r.url()}`); // offline means offline
       r.abort();
@@ -211,8 +215,10 @@ try {
     await text(page, '#setErr', 'first lower');
     await set(page, '#setForm [name=min_f]', '60');
     await set(page, '#setForm [name=max_f]', '80');
+    await set(page, '#setForm [name=cap]', '120');
     await click(page, '#setForm button');
-    await page.waitForFunction(() => window.__fake.writes.some(w => w.path === 'spaces/s1/settings/main' && w.data.trips?.weekend.weeks[0] === 3 && w.data.weather.min_f === 60 && w.data.weather.max_f === 80));
+    await page.waitForFunction(() => window.__fake.writes.some(w => w.path === 'spaces/s1/settings/main' && w.data.trips?.weekend.weeks[0] === 3 && w.data.weather.min_f === 60 && w.data.weather.max_f === 80
+      && w.data.search.cap === 120));
   });
 
   await run('settings: airlines', async () => {
@@ -325,6 +331,29 @@ try {
     for (const y of [190, 240, 290]) await page.touchscreen.touchMove(180, y);
     await page.touchscreen.touchEnd();
     await text(page, '#trips', 'Pulled City');
+    // Android's WebView may end the pull with touchcancel
+    await page.evaluate(() => { window.__fake.docs['spaces/s1/suggestions/current'].top[0].name = 'Cancelled City'; });
+    const cdp = await page.createCDPSession();
+    const touch = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: y == null ? [] : [{ x: 180, y }] });
+    await touch('touchStart', 150);
+    for (const y of [190, 240, 290]) await touch('touchMove', y);
+    await touch('touchCancel');
+    await text(page, '#trips', 'Cancelled City');
+  });
+
+  await run('APK: update banner when a newer release is out', async () => {
+    if (await page.$eval('#update', el => !el.hidden)) throw new Error('web app showed an update banner');
+    apkVersion = '1.0.9';
+    const p = await asTest();
+    await text(p, '#update', '1.0.10 is out');
+    if (!(await p.$eval('#update', a => a.href)).endsWith('Flybye-1.0.10.apk')) throw new Error('banner link');
+    apkVersion = '1.0.10';
+    const q = await asTest();
+    await text(q, '#trips', 'Top picks');
+    await new Promise(r => setTimeout(r, 300));
+    if (await q.$eval('#update', el => !el.hidden)) throw new Error('banner shown for the current version');
+    apkVersion = '';
+    await p.close(); await q.close();
   });
 
   await run('no sideways scroll at phone width', async () => {

@@ -24,7 +24,9 @@ def cost(w, cfg):
     return areas + len(own_stops_cities(w.kind, cfg))
 
 
-def choose(windows, last_searched, budget, cfg):
+def choose(windows, last_searched, budget, cfg, stale_before=""):
+    """Windows to search today: never searched first, then oldest, then nearest. Skips ones searched since stale_before."""
+    windows = [w for w in windows if not stale_before or last_searched.get(w.id, "") < stale_before]
     order = sorted(windows, key=lambda w: (w.id in last_searched, last_searched.get(w.id, ""), w.out))
     picked = []
     for w in order:

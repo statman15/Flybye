@@ -2,6 +2,7 @@ import { $, esc, money, dur, day, toDate, safeUrl } from './ui.js';
 import { auth, db, onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut,
   doc, getDoc, getDocs, collection, query, where, writeBatch, setDoc, updateDoc, deleteDoc, webPushToken } from './fb.js';
 import { TIMES_URL } from './firebase-config.js';
+import { VERSION } from './version.js';
 
 const cap = window.Capacitor;
 const native = cap?.isNativePlatform?.();
@@ -97,12 +98,33 @@ async function go(t) {
 }
 
 // Pull down from the top of a tab to reload it (phones have no reload button in a home-screen app).
-let pullY = null;
-addEventListener('touchstart', e => { pullY = scrollY <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null; }, { passive: true });
-addEventListener('touchend', e => {
-  if (pullY !== null && e.changedTouches[0].clientY - pullY > 100 && !$('#gate:not([hidden])')) { toast('Refreshing…'); refresh(); }
-  pullY = null;
-}, { passive: true });
+// Android's WebView can end the gesture with touchcancel instead of touchend, so the distance comes from touchmove.
+let pullY = null, pullTo = null;
+addEventListener('touchstart', e => { pullY = pullTo = scrollY <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null; }, { passive: true });
+addEventListener('touchmove', e => { if (pullY !== null) pullTo = e.touches[0].clientY; }, { passive: true });
+const pullEnd = async () => {
+  const pulled = pullY !== null && pullTo - pullY > 80 && !$('#gate:not([hidden])');
+  pullY = pullTo = null;
+  if (!pulled) return;
+  toast('Refreshing…');
+  await refresh();
+  toast('Up to date');
+};
+addEventListener('touchend', pullEnd, { passive: true });
+addEventListener('touchcancel', pullEnd, { passive: true });
+
+// The APK checks GitHub for a newer release when it opens and shows a banner that downloads it.
+async function checkUpdate() {
+  if (!VERSION) return;
+  const r = await fetch('https://api.github.com/repos/statman15/Flybye/releases/latest').then(r => r.ok ? r.json() : null).catch(() => null);
+  const latest = /^v?([\d.]+)$/.exec(r?.tag_name || '')?.[1], apk = (r?.assets || []).find(a => a.name.endsWith('.apk'));
+  if (!latest || !apk || !newer(latest, VERSION)) return;
+  const b = $('#update');
+  b.href = safeUrl(apk.browser_download_url);
+  b.textContent = `Flybye ${latest} is out. Tap to update.`;
+  b.hidden = false;
+}
+const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
 
 // One click handler for every button that does something, one submit handler for every form.
 const acts = {
@@ -164,10 +186,10 @@ const forms = {
     const nights = f.nights.value.split(/[\s,]+/).filter(Boolean).map(Number);
     if (!nights.length || !nights.every(n => Number.isInteger(n) && n >= 1 && n <= 30)) throw new Error('Nights are whole numbers from 1 to 30.');
     trips.long.nights = nights;
-    await mutate(s => ({ ...basics, trips: Object.fromEntries(Object.entries(trips).map(([k, t]) => [k, { ...(s.trips || {})[k], ...t }])) }));
+    await mutate(s => ({ ...basics(s), trips: Object.fromEntries(Object.entries(trips).map(([k, t]) => [k, { ...(s.trips || {})[k], ...t }])) }));
     toast('Saved');
   },
-  basicForm: async f => { const b = readBasics(f); await mutate(() => b); toast('Saved'); },
+  basicForm: async f => { await mutate(readBasics(f)); toast('Saved'); },
   airForm: async f => {
     const list = f.list.value, code = f.code.value.trim().toUpperCase();
     if (!IATA.test(code)) throw new Error('Airline codes are 2 letters or digits, like UA or B6.');
@@ -227,11 +249,15 @@ function readBasics(f) {
   const home = f.home.value.trim().toUpperCase(), min = +f.min_f.value, max = +f.max_f.value;
   if (!AIRPORT.test(home)) throw new Error('Home airport is 3 letters, like ORD.');
   if (![min, max].every(n => Number.isInteger(n) && n >= -20 && n <= 120) || min >= max) throw new Error('Weather range: two whole °F numbers, the first lower than the second.');
-  return { home, weather: { min_f: min, max_f: max } };
+  const cap = +f.cap.value;
+  if (!Number.isInteger(cap) || cap < 0 || cap > 100000) throw new Error('Searches per month: a whole number (SerpApi’s free plan has 250).');
+  return s => ({ home, weather: { min_f: min, max_f: max }, search: { ...s.search, cap } });
 }
 const basicsFields = s => `<label>Home airport<input name="home" maxlength="3" autocapitalize="characters" value="${esc(s.home)}"></label>
   <div class="two"><label>Ideal high, from (°F)<input type="number" inputmode="numeric" name="min_f" value="${esc(s.weather?.min_f ?? 65)}"></label>
-  <label>to (°F)<input type="number" inputmode="numeric" name="max_f" value="${esc(s.weather?.max_f ?? 85)}"></label></div>`;
+  <label>to (°F)<input type="number" inputmode="numeric" name="max_f" value="${esc(s.weather?.max_f ?? 85)}"></label></div>
+  <label>Searches per month<input type="number" inputmode="numeric" min="0" name="cap" value="${esc(s.search?.cap ?? 230)}"></label>
+  <p class="hint">The daily run spreads these over the month, and tapping a trip uses 2. SerpApi’s free plan has 250.</p>`;
 
 // --- Trips
 const stopsText = n => (n ? `${n} stop${n > 1 ? 's' : ''}` : 'Nonstop');
@@ -595,5 +621,6 @@ async function boot() {
   else if (spaces.length) gatePicker();
   else gateNoSpace();
 }
+checkUpdate();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {}); // offline shell + web push; optional
 onAuthStateChanged(auth, user => (user ? boot() : (S = null, gateSignIn(''))));

@@ -52,7 +52,9 @@ def sweep(cfg, st, today, windows, get, send, errors):
     budget = pick.allowance(cfg["search"]["cap"], b["used"], today)
     rows = []
     calls = []
-    for w in pick.choose(windows, b["last"], budget, cfg):
+    # a window is re-searched once a week at most
+    stale = (today - timedelta(days=cfg["search"].get("refresh_days", 7) - 1)).isoformat()
+    for w in pick.choose(windows, b["last"], budget, cfg, stale):
         calls += [lambda w=w, a=a: serp.explore(w, a, cfg, st, get)
                   for a in (cfg["search"]["long_areas"] if w.kind == "long" else [None])]
         calls += [lambda w=w, c=c: [r for r in [serp.flights(w, c["airports"], c["stops"], c["name"], cfg, st, get)] if r]
@@ -140,9 +142,9 @@ def windows_report(windows, labels, cfg, ci):
 
 
 def next_run(now):
-    """When the cron (13:00 UTC every day) fires next."""
+    """When the main cron (12:17 UTC every day, daily.yml) fires next."""
     n = now.astimezone(timezone.utc)
-    t = n.replace(hour=13, minute=0, second=0, microsecond=0)
+    t = n.replace(hour=12, minute=17, second=0, microsecond=0)
     return (t if t > n else t + timedelta(days=1)).isoformat(timespec="seconds")
 
 
@@ -193,6 +195,8 @@ def command(st, cmd, today, fetch=cal.fetch, chat=ai.http_chat, wget=weather.htt
     cfg = load_cfg(st)
     ask = lambda p, m: chat(p, m, st.keys().get("gemini"))
     if cmd == "daily":
+        if os.environ.get("FLYBYE_BACKUP") and st.activity().get("last_run", "").startswith(str(today)):
+            return  # the backup cron: this space already ran today
         daily(cfg, st, today, fetch=fetch, chat=chat, wget=wget, **kw)
     elif cmd == "windows":
         ws, _ = free_windows(cfg, st, today, fetch, ask)

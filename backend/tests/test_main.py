@@ -112,6 +112,16 @@ def test_sunday_sends_summary_and_new_labels():
     assert "new calendar event" not in f.sent[-1][1]            # labels only counted once
 
 
+def test_backup_cron_skips_a_space_that_already_ran_today(monkeypatch):
+    st, f = fresh(), Fakes()
+    monkeypatch.setenv("FLYBYE_BACKUP", "1")
+    st.set_activity({"last_run": "2026-10-18T07:20:00-05:00"})
+    main.command(st, "daily", date(2026, 10, 18), fetch=f.fetch, chat=f.chat, wget=f.wget, get=f.get, send=f.send)
+    assert f.params == [] and f.sent == []
+    main.command(st, "daily", date(2026, 10, 19), fetch=f.fetch, chat=f.chat, wget=f.wget, get=f.get, send=f.send)
+    assert f.params  # the next day it runs
+
+
 def test_every_daily_run_writes_the_suggestions_doc():
     st, f = fresh(), Fakes()
     run(date(2026, 10, 17), f, st)                              # a Saturday: no summary, still published

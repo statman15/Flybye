@@ -49,6 +49,13 @@ def test_choose_never_searched_first_then_oldest_then_nearest():
     assert pick.choose([a, b, c], last, 2, CFG) == [c, b]
 
 
+def test_choose_skips_windows_searched_since_stale_before():
+    a = Window("weekend", date(2026, 11, 6), date(2026, 11, 8), None)
+    b = Window("weekend", date(2026, 11, 13), date(2026, 11, 15), None)
+    last = {a.id: "2026-10-19T07:20:00-05:00", b.id: "2026-10-12T07:20:00-05:00"}
+    assert pick.choose([a, b], last, 9, CFG, "2026-10-13") == [b]
+
+
 def test_choose_skips_what_does_not_fit_and_takes_cheaper_ones():
     assert pick.choose([LONG, WE], {}, 2, CFG) == [WE]
 

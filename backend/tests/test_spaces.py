@@ -113,9 +113,9 @@ def test_the_activity_doc_shape():
     assert searched and all(w["picks"] > 0 for w in searched) and "weekend:2026-11-13:2026-11-15" not in {w["id"] for w in a["windows"]}
 
 
-def test_next_run_is_the_next_13_utc():
-    assert main.next_run(datetime(2026, 10, 17, 8, tzinfo=timezone.utc)) == "2026-10-17T13:00:00+00:00"
-    assert main.next_run(datetime(2026, 10, 17, 9, tzinfo=main.TZ)) == "2026-10-18T13:00:00+00:00"   # 14:00 UTC already passed
+def test_next_run_is_the_next_1217_utc():
+    assert main.next_run(datetime(2026, 10, 17, 8, tzinfo=timezone.utc)) == "2026-10-17T12:17:00+00:00"
+    assert main.next_run(datetime(2026, 10, 17, 9, tzinfo=main.TZ)) == "2026-10-18T12:17:00+00:00"   # 14:00 UTC already passed
 
 
 def test_activity_keeps_the_newest_twenty_errors():
