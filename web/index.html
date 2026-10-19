@@ -28,7 +28,7 @@
     --bg: #ffffff; --sheet: #f2f2f7; --group: #ffffff;
     --label: #111113; --label2: #636366; --sep: rgba(60, 60, 67, .2);
     --fill: rgba(118, 118, 128, .12); --fill-strong: rgba(118, 118, 128, .2);
-    --tint: #0a6cc4; --on-tint: #ffffff; --danger: #d70015; --good: #1a7f37;
+    --tint: #0a6cc4; --on-tint: #ffffff; --danger: #d70015; --good: #1a7f37; --look: #a35200; --look-fill: rgba(255, 149, 0, .14);
     --lift: rgba(20, 30, 40, .16);
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     -webkit-text-size-adjust: 100%;
@@ -38,7 +38,7 @@
       --bg: #0c0c0d; --sheet: #1c1c1e; --group: #2c2c2e;
       --label: #f5f5f7; --label2: #a1a1a6; --sep: rgba(84, 84, 88, .6);
       --fill: rgba(118, 118, 128, .24); --fill-strong: rgba(118, 118, 128, .36);
-      --tint: #64b5ff; --on-tint: #04213a; --danger: #ff6961; --good: #5dd37d;
+      --tint: #64b5ff; --on-tint: #04213a; --danger: #ff6961; --good: #5dd37d; --look: #ffb340; --look-fill: rgba(255, 159, 10, .2);
       --lift: rgba(0, 0, 0, .5);
     }
   }
@@ -71,7 +71,10 @@
   details.kind > summary small { font-size: 14px; font-weight: 400; color: var(--label2); }
   details.kind[open] { padding-bottom: 4px; }
   details.kind .group { margin-left: 8px; margin-right: 8px; }
-  details.more > summary { margin: 0 16px 12px; color: var(--tint); font-weight: 600; cursor: pointer; }
+  details.more > summary { margin: 0 16px 12px; color: var(--look); font-weight: 600; cursor: pointer; }
+  details.more > summary small { display: block; margin-left: 18px; font-size: 13px; font-weight: 400; color: var(--label2); }
+  .card.look { box-shadow: inset 4px 0 0 var(--look), inset 0 0 0 .5px var(--sep); } /* not on the wish list: an idea, not a target */
+  .tag.look { color: var(--look); background: var(--look-fill); }
   .city { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
   .price { font-size: 20px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .price small { font-size: 13px; font-weight: 400; color: var(--label2); }

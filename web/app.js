@@ -275,15 +275,15 @@ function rankHtml(sc) {
     .filter(([, v]) => Number.isFinite(v) && v !== 0);
   return `<div class="rank" hidden>${rows.map(([l, v]) => `<p><span>${esc(l)}</span><b>${esc(pts(v))}</b></p>`).join('')}<p class="total"><span>Score</span><b>${esc(Math.round(sc.total * 10) / 10)}</b></p></div>`;
 }
-function pickCard(p, w, tag = '') {
+function pickCard(p, w) {
   const pct = p.usual > 0 ? Math.round((1 - p.price / p.usual) * 100) : 0, wx = wxLine(p.weather);
-  return `<article class="group card" data-trip="${esc(w.id)}|${esc(p.code)}">
+  return `<article class="group card${p.wish ? '' : ' look'}" data-trip="${esc(w.id)}|${esc(p.code)}">
     <div class="card-top"><span class="city">${esc(p.name)}</span><span class="price">${esc(money(p.price))} <small>for 2</small></span></div>
     <p class="meta">${esc(day(w.out))} → ${esc(day(w.ret))}${w.holiday ? ' · ' + esc(w.holiday) : ''}</p>
     <p class="meta">${[dur(p.minutes), stopsText(p.stops), p.airline, p.hotel != null ? 'hotel ' + money(p.hotel) : ''].filter(Boolean).map(esc).join(' · ')}</p>
     ${wx ? `<p class="meta wx">${esc(wx)}</p>` : ''}
     ${pct > 0 ? `<p class="meta deal">${pct}% under usual (${esc(money(p.usual))})</p>` : ''}
-    <div class="tags">${p.wish ? '<span class="tag on">Wish list</span>' : ''}${tag ? `<span class="tag">${esc(tag)}</span>` : ''}</div>
+    <div class="tags">${p.wish ? '<span class="tag on">Wish list</span>' : '<span class="tag look">Worth a look</span>'}</div>
     <div class="row"><a class="pill small" href="${esc(safeUrl(p.link))}" target="_blank" rel="noopener noreferrer">Google Flights</a>
     ${p.score ? '<button class="pill small quiet" data-act="rank" aria-expanded="false">Why this rank</button>' + rankHtml(p.score) : ''}</div>
   </article>`;
@@ -298,7 +298,7 @@ async function renderTrips() {
     return;
   }
   const s = sugg = snap.data();
-  const top = (s.top || []).map(p => pickCard(p, windowOf(s, p.window_id) || { id: p.window_id }, p.wish ? '' : 'Surprise'));
+  const top = (s.top || []).map(p => pickCard(p, windowOf(s, p.window_id) || { id: p.window_id }));
   // Sections by trip type (native <details>, closed until tapped); longer trips split at the border.
   const abroad = p => (p.country || '') !== 'United States';
   const sections = [['weekend', 'Weekends', () => true], ['3day', '3-day weekends', () => true],
@@ -311,7 +311,7 @@ async function renderTrips() {
       const mine = picks.filter(p => p.wish), others = picks.filter(p => !p.wish);
       return `<h2 class="sec">${esc(day(w.out))} → ${esc(day(w.ret))}${w.holiday ? `<small>${esc(w.holiday)}</small>` : ''}</h2>
         ${mine.map(p => pickCard(p, w)).join('') || '<p class="pad muted">No wish-list city flies nonstop on these dates.</p>'}
-        ${others.length ? `<details class="more"><summary>Other cities (${others.length})</summary>${others.map(p => pickCard(p, w)).join('')}</details>` : ''}`;
+        ${others.length ? `<details class="more"><summary>Worth a look (${others.length})<small>Not on your wish list, but good options for these dates</small></summary>${others.map(p => pickCard(p, w)).join('')}</details>` : ''}`;
     }).join('');
     return `<details class="kind" data-sec="${i}"${openSecs.has(i) ? ' open' : ''}><summary>${esc(title)} <small>${wins.length} date${wins.length > 1 ? 's' : ''}</small></summary>${html}</details>`;
   }).join('');
