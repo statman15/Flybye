@@ -99,7 +99,7 @@ def instant_alerts(cfg, st, today, rows, get, send):
         if pick.should_alert(r, c, sent, today, cfg):
             r = {**r, "price": c["lowest"] or r["price"]}
             msg = (pick.fmt_row(r, base.get((r["code"], r["kind"])), cfg)
-                   + f"\nGoogle's usual: ${c['typical_low']}–${c['typical_high']} per person. You're both free.")
+                   + f"\nGoogle's usual: ${c['typical_low']}–${c['typical_high']} for this trip. You're both free.")
             send("Flybye deal: " + pick.city_for(r["code"], cfg)["name"], msg,
                  {"window_id": r["window_id"], "code": r["code"], "space": st.sid}, app_link(st.sid, r["window_id"], r["code"]))
             a = {"at": str(today), "code": r["code"], "out": r["out"], "ret": r["ret"], "price": r["price"], "kind": r["kind"]}

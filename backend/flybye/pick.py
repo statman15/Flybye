@@ -111,12 +111,13 @@ def fmt_row(row, base, cfg):
     vs = f" ({round((base - row['price']) / base * 100)}% under usual)" if base and row["price"] < base else ""
     stops = "nonstop" if not row["stops"] else f"{row['stops']} stop"
     hotel = f" · hotel ~${round(row['hotel'])}" if row.get("hotel") else ""
-    return (f"{name} · {_d(row['out'])}–{_d(row['ret'])} · ${round(row['price'])} per person{vs}"
+    return (f"{name} · {_d(row['out'])}–{_d(row['ret'])} · ${round(row['price'])} for {cfg['search']['adults']}{vs}"
             f" · {row['minutes'] // 60}h{row['minutes'] % 60:02d} {stops}{hotel}")
 
 
 def flights_link(row, cfg):
-    q = f"Flights to {row['code']} from {cfg.get('home', 'ORD')} on {row['out']} through {row['ret']} nonstop"
+    # prices here are totals for every traveler, so the link asks Google for the same number of adults
+    q = f"Flights to {row['code']} from {cfg.get('home', 'ORD')} on {row['out']} through {row['ret']} nonstop for {cfg['search']['adults']} adults"
     return "https://www.google.com/travel/flights?q=" + urllib.parse.quote(q)
 
 

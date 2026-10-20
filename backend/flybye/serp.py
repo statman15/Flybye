@@ -61,17 +61,12 @@ def _itins(d):
     return d.get("best_flights", []) + d.get("other_flights", [])
 
 
-def _each(price, cfg):
-    """google_flights prices are for every traveler; Explore's (and the Google Flights link's) are per person."""
-    return round(price / cfg["search"]["adults"]) if price else price
-
-
 def flights(w, airports, stops, name, cfg, st, get):
     d = _call({**_base("google_flights", w, cfg), "arrival_id": ",".join(airports), "stops": stops}, w.id, st, get)
     best = min(_itins(d), key=lambda x: x["price"], default=None)
     if not best:
         return None
-    return _row(w, airports[0], name, _each(best["price"], cfg), None, best["total_duration"],
+    return _row(w, airports[0], name, best["price"], None, best["total_duration"],
                 best["flights"][0]["airline"], len(best.get("layovers", [])), "flights",
                 (best["flights"][0].get("flight_number") or "").split(" ")[0] or None)
 
@@ -86,5 +81,5 @@ def confirm(row, cfg, st, get):
     pi = d.get("price_insights", {})
     rng = pi.get("typical_price_range") or [None, None]
     first = min(_itins(d), key=lambda x: x["price"], default=None)
-    return {"lowest": _each(pi.get("lowest_price"), cfg), "typical_low": _each(rng[0], cfg), "typical_high": _each(rng[-1], cfg), "level": pi.get("price_level"),
+    return {"lowest": pi.get("lowest_price"), "typical_low": rng[0], "typical_high": rng[-1], "level": pi.get("price_level"),
             "depart": first["flights"][0]["departure_airport"]["time"] if first else None}

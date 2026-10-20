@@ -278,7 +278,7 @@ function rankHtml(sc) {
 function pickCard(p, w) {
   const pct = p.usual > 0 ? Math.round((1 - p.price / p.usual) * 100) : 0, wx = wxLine(p.weather);
   return `<article class="group card${p.wish ? '' : ' look'}" data-trip="${esc(w.id)}|${esc(p.code)}">
-    <div class="card-top"><span class="city">${esc(p.name)}</span><span class="price">${esc(money(p.price))} <small>per person</small></span></div>
+    <div class="card-top"><span class="city">${esc(p.name)}</span><span class="price">${esc(money(p.price))} <small>for 2</small></span></div>
     <p class="meta">${esc(day(w.out))} → ${esc(day(w.ret))}${w.holiday ? ' · ' + esc(w.holiday) : ''}</p>
     <p class="meta">${[dur(p.minutes), stopsText(p.stops), p.airline, p.hotel != null ? 'hotel ' + money(p.hotel) : ''].filter(Boolean).map(esc).join(' · ')}</p>
     ${wx ? `<p class="meta wx">${esc(wx)}</p>` : ''}
@@ -380,7 +380,7 @@ async function renderTrip() {
   if (!p) return go('trips');
   el.innerHTML = `<div class="head"><button class="back" data-go="trips">‹ Trips</button><h1>${esc(p.name)}</h1>
     <p class="sub">${esc(day(w.out))} → ${esc(day(w.ret))}${w.holiday ? ' · ' + esc(w.holiday) : ''}</p></div>
-    <div class="pad"><p class="meta">${[money(p.price) + ' per person', dur(p.minutes), stopsText(p.stops), p.airline].filter(Boolean).map(esc).join(' · ')}</p>
+    <div class="pad"><p class="meta">${[money(p.price) + ' for 2', dur(p.minutes), stopsText(p.stops), p.airline].filter(Boolean).map(esc).join(' · ')}</p>
     ${wxLine(p.weather) ? `<p class="meta wx">${esc(wxLine(p.weather))}</p>` : ''}</div>
     <div id="times"><p class="pad muted"><span class="spin" aria-hidden="true"></span> Looking up flight times…</p></div>`;
   let html;

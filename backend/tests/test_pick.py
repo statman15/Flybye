@@ -139,7 +139,7 @@ def test_avoided_airlines_are_dropped_and_preferred_ranked_higher():
 
 def test_fmt_row():
     t = pick.fmt_row(row(price=410), 533, CFG)
-    assert t == "Denver · Fri Nov 13–Sun Nov 15 · $410 per person (23% under usual) · 2h56 nonstop · hotel ~$150"
+    assert t == "Denver · Fri Nov 13–Sun Nov 15 · $410 for 2 (23% under usual) · 2h56 nonstop · hotel ~$150"
 
 
 def test_summary_top_three_wish_plus_one_surprise():
@@ -171,7 +171,7 @@ def test_suggestions_doc_shape():
     assert set(p["score"]) == {"total", "under_pct", "hours", "wish", "holiday", "weather", "airline"}
     assert p["score"]["airline"] == 8 and p["score"]["wish"] == 10 and p["score"]["under_pct"] == 40.0
     assert p["usual"] == 500 and p["wish"] is True and p["name"] == "Denver"
-    assert p["link"].startswith("https://www.google.com/travel/flights?q=") and "DEN" in p["link"]
+    assert p["link"].startswith("https://www.google.com/travel/flights?q=") and "DEN" in p["link"] and "for%202%20adults" in p["link"]
     assert next(p for p in first["picks"] if p["code"] == "BNA")["usual"] is None
     assert [(t["code"], t["window_id"]) for t in doc["top"]][-1] == ("BNA", WE.id)   # 3 wish picks + the surprise
     assert len(doc["top"]) == 4 and sum(t["wish"] for t in doc["top"]) == 3
@@ -214,9 +214,9 @@ def test_flights_cheapest_itinerary_and_confirm():
     st = new_store()
     get, calls = fake_get("flights.json")
     r = serp.flights(LONG, ["OPO"], 2, "Porto", CFG, st, get)
-    assert r["price"] == 429 and r["code"] == "OPO" and r["source"] == "flights" and calls[0]["stops"] == 2
+    assert r["price"] == 858 and r["code"] == "OPO" and r["source"] == "flights" and calls[0]["stops"] == 2
     c = serp.confirm(row("BNA", 858), CFG, st, get)
-    assert c["lowest"] == 429 and c["typical_low"] == 195 and c["typical_high"] == 370  # google_flights totals for 2, per person
+    assert c["lowest"] == 858 and c["typical_low"] == 390 and c["typical_high"] == 740
     assert calls[1]["arrival_id"] == "BNA" and calls[1]["stops"] == 1
 
 
