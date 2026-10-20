@@ -23,6 +23,7 @@ search:
   long_areas: [null, /m/02j9z, /m/0j0k]   # default (North America), Europe, Asia
   confirm_per_run: 2         # google_flights checks of possible deals per day
   refresh_days: 7            # re-search a date range at most this often
+  typical_per_run: 4         # Google typical-price lookups per day (one per wish city, trip type and month, kept 30 days)
 
 alerts:
   deal_ratio: 0.8            # check a wish city when it's 20%+ under its usual price (or we don't know it yet)

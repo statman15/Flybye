@@ -73,6 +73,16 @@ def explore_flex(area, cfg, st, get):
             if x.get("flight_price") and x.get("destination_airport") and x.get("start_date") and x.get("end_date")]
 
 
+def typical(w, city, cfg, st, get):
+    """Google's typical price range (total for every traveler) for a wish city on a trip like w, from its own fare history.
+    One lookup stands for every trip of that type to that city leaving in the same month."""
+    from .pick import typical_id
+    d = _call({**_base("google_flights", w, cfg), "arrival_id": ",".join(city["airports"]),
+               "stops": city.get("stops", cfg["search"]["stops"])}, "typical:" + typical_id(city, w.kind, f"{w.out:%Y-%m}"), st, get)
+    rng = d.get("price_insights", {}).get("typical_price_range")
+    return {"low": rng[0], "high": rng[-1]} if rng else None
+
+
 def flex_key(area):
     return f"flex:{area or 'home'}"
 

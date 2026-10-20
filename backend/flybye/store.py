@@ -106,6 +106,13 @@ class Store:
         for w, rs in by_window.items():
             self._set("latest", w, {"seen": seen, "rows": rs})
 
+    def typical(self, tid):
+        """Google's typical range for a wish city, trip type and month: {low, high, at}."""
+        return self._get("typical", tid, None)
+
+    def set_typical(self, tid, doc):
+        self._set("typical", tid, doc)
+
     def latest_ids(self):
         # ponytail: lists every stored window (old ones too); prune latest/ if this gets slow
         return [s.id for s in self._col("latest").stream()]

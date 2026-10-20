@@ -69,7 +69,7 @@ def test_baseline_needs_four_prices_from_two_windows():
 
 def test_deal_candidates_only_wish_cities_cheap_or_unknown_sorted_capped():
     rows = [row("DEN", 300), row("FLL", 200, name="Miami"), row("BNA", 100, name="Nashville"), row("OPO", 900)]
-    base = {("DEN", "weekend"): 500, ("FLL", "weekend"): 210}
+    base = {("DEN", "weekend", "2026-11"): 500, ("FLL", "weekend", "2026-11"): 210}
     got = pick.deal_candidates(rows, base, CFG)
     assert [r["code"] for r in got] == ["DEN", "OPO"]  # FLL 0.95 not a deal; BNA not on the list; unknown last
 
@@ -158,7 +158,7 @@ def test_suggestions_doc_shape():
     w2 = Window("weekend", date(2026, 11, 20), date(2026, 11, 22), "Veterans Day")
     rows = [row("DEN", 300), row("DEN", 350, window=w2), row("FLL", 250, name="Miami"),
             row("BNA", 100, name="Nashville"), row("ATL", 120, name="Atlanta")]
-    doc = pick.suggestions(rows, {("DEN", "weekend"): 500}, {WE.id: WE, w2.id: w2}, CFG, "2026-10-17T08:00:00")
+    doc = pick.suggestions(rows, {("DEN", "weekend", "2026-11"): 500}, {WE.id: WE, w2.id: w2}, CFG, "2026-10-17T08:00:00")
     assert doc["updated"] == "2026-10-17T08:00:00"
     assert [w["id"] for w in doc["windows"]] == [WE.id, w2.id]            # soonest first
     first = doc["windows"][0]

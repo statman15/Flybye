@@ -53,9 +53,42 @@ def month(today):
     return f"{today:%Y-%m}"
 
 
-def baselines(st, codes_kinds, before):
-    return {(code, kind): pick.baseline([r for r in st.route_prices(code, kind) if r["seen"] < before])
-            for code, kind in codes_kinds}
+def baselines(st, rows, before, cfg):
+    """Usual price per pick.bkey: for wish cities, the middle of Google's typical range for that month (its fare
+    history, looked up monthly); otherwise, or until that lookup happens, the median of the prices we've seen."""
+    # ponytail: the range's midpoint as "usual" (Google's own "cheaper than usual" sat within 5% of it on ORD-NRT)
+    ours, out = {}, {}
+    for r in rows:
+        k = pick.bkey(r)
+        if k in out:
+            continue
+        city = pick.city_for(r["code"], cfg)
+        t = st.typical(pick.typical_id(city, r["kind"], k[2])) if city else None
+        if t and t.get("low"):
+            out[k] = (t["low"] + t["high"]) / 2
+        else:
+            if (r["code"], r["kind"]) not in ours:
+                ours[r["code"], r["kind"]] = pick.baseline([p for p in st.route_prices(r["code"], r["kind"]) if p["seen"] < before])
+            out[k] = ours[r["code"], r["kind"]]
+    return out
+
+
+def typical_due(cfg, st, today, windows):
+    """(wish city, a window) per city, trip type and month whose Google range is missing or a month old, nearest first."""
+    old = (today - timedelta(days=30)).isoformat()
+    due = {}
+    for w in sorted(windows, key=lambda w: w.out):
+        for c in cfg["cities"]:
+            tid = pick.typical_id(c, w.kind, f"{w.out:%Y-%m}")
+            if w.kind in c["trips"] and tid not in due and (st.typical(tid) or {}).get("at", "") < old:
+                due[tid] = (c, w)
+    return list(due.items())
+
+
+def fetch_typical(tid, c, w, cfg, st, today, get):
+    """Stored even when Google has no range, so that combo waits a month instead of costing a search every day."""
+    st.set_typical(tid, {**(serp.typical(w, c, cfg, st, get) or {}), "at": str(today)})
+    return []
 
 
 def sweep(cfg, st, today, windows, get, send, errors, fits=lambda w: False):
@@ -71,6 +104,10 @@ def sweep(cfg, st, today, windows, get, send, errors, fits=lambda w: False):
         # ponytail: a flexible pick on exactly a fixed window's dates shares its latest/ doc, so whichever search ran last wins until the next one
         calls += [lambda a=a: [r for r in serp.explore_flex(a, cfg, st, get) if fits(parse(r["window_id"]))] for a in flex]
         budget -= len(flex)
+    # then Google's typical range for a few wish city x trip type x month combos, so "usual" has a year of history behind it
+    for tid, (c, w) in typical_due(cfg, st, today, windows)[:min(budget, cfg["search"].get("typical_per_run", 4))]:
+        calls.append(lambda tid=tid, c=c, w=w: fetch_typical(tid, c, w, cfg, st, today, get))
+        budget -= 1
     for w in pick.choose(windows, b["last"], budget, cfg, stale):
         calls += [lambda w=w, a=a: serp.explore(w, a, cfg, st, get)
                   for a in (cfg["search"]["long_areas"] if w.kind == "long" else [None])]
@@ -100,7 +137,7 @@ def sweep(cfg, st, today, windows, get, send, errors, fits=lambda w: False):
 
 
 def instant_alerts(cfg, st, today, rows, get, send):
-    base = baselines(st, {(r["code"], r["kind"]) for r in rows}, str(today))
+    base = baselines(st, rows, str(today), cfg)
     sent = st.alerts()
     week_ago = (today - timedelta(days=7)).isoformat()
     # confirms are logged as "<window>|<code>"
@@ -115,7 +152,7 @@ def instant_alerts(cfg, st, today, rows, get, send):
             continue
         if pick.should_alert(r, c, sent, today, cfg):
             r = {**r, "price": c["lowest"] or r["price"]}
-            msg = (pick.fmt_row(r, base.get((r["code"], r["kind"])), cfg)
+            msg = (pick.fmt_row(r, base.get(pick.bkey(r)), cfg)
                    + f"\nGoogle's usual: ${pick.each(c['typical_low'], cfg)}–${pick.each(c['typical_high'], cfg)} per person. You're both free.")
             send("Flybye deal: " + pick.city_for(r["code"], cfg)["name"], msg,
                  {"window_id": r["window_id"], "code": r["code"], "space": st.sid}, app_link(st.sid, r["window_id"], r["code"]))
@@ -131,7 +168,7 @@ def latest(cfg, st, today, windows, wx):
     rows = pick.keep(st.latest_rows(list(ids), (today - timedelta(days=21)).isoformat()), cfg)
     if wx:
         rows = [{**r, "weather": wx.of(r)} for r in rows]
-    return rows, ids, baselines(st, {(r["code"], r["kind"]) for r in rows}, "9999")
+    return rows, ids, baselines(st, rows, "9999", cfg)
 
 
 def publish(cfg, st, today, windows, wx):

@@ -36,6 +36,15 @@ def choose(windows, last_searched, budget, cfg, stale_before=""):
     return picked
 
 
+def bkey(row):
+    """What a usual price is kept for: city airport, trip type and the month the trip leaves."""
+    return row["code"], row["kind"], row["out"][:7]
+
+
+def typical_id(city, kind, month):
+    return f"{city['airports'][0]}_{kind}_{month}"
+
+
 def baseline(rows):
     """A route's usual price for a trip type: the median, once we've seen it 4+ times across 2+ windows."""
     if len(rows) < 4 or len({r["window_id"] for r in rows}) < 2:
@@ -49,7 +58,7 @@ def deal_candidates(rows, baselines, cfg, recent=()):
     for r in rows:
         if not city_for(r["code"], cfg) or f"{r['window_id']}|{r['code']}" in recent:
             continue
-        b = baselines.get((r["code"], r["kind"]))
+        b = baselines.get(bkey(r))
         ratio = r["price"] / b if b else 1.0  # unknown baseline: worth a check, after the real deals
         if b is None or ratio <= cfg["alerts"]["deal_ratio"]:
             out.append((ratio, r))
@@ -127,7 +136,7 @@ def flights_link(row, cfg):
 
 def ranked(rows, baselines, windows, cfg):
     """Rows of windows that are still free, best first."""
-    scored = sorted(((score(r, baselines.get((r["code"], r["kind"])), windows[r["window_id"]], cfg), r)
+    scored = sorted(((score(r, baselines.get(bkey(r)), windows[r["window_id"]], cfg), r)
                      for r in rows if r["window_id"] in windows), key=lambda x: -x[0])
     return [r for _, r in scored]
 
@@ -141,9 +150,9 @@ def top(ranked_rows, cfg):
 
 def _pick(r, baselines, windows, cfg):
     city = city_for(r["code"], cfg)
-    why = parts(r, baselines.get((r["code"], r["kind"])), windows[r["window_id"]], cfg)
+    why = parts(r, baselines.get(bkey(r)), windows[r["window_id"]], cfg)
     return {"code": r["code"], "name": city["name"] if city else r["name"], "price": each(r["price"], cfg),
-            "usual": each(baselines.get((r["code"], r["kind"])), cfg), "minutes": r["minutes"], "stops": r["stops"],
+            "usual": each(baselines.get(bkey(r)), cfg), "minutes": r["minutes"], "stops": r["stops"],
             "hotel": r.get("hotel"), "airline": r.get("airline"), "airline_code": r.get("airline_code"), "wish": bool(city),
             "link": flights_link(r, cfg), "weather": r.get("weather"), "score": {k: round(v, 1) for k, v in why.items()},
             "country": r.get("country"), "flex": r.get("source") == "flex"}
@@ -168,9 +177,9 @@ def suggestions(rows, baselines, windows, cfg, updated):
 def summary(rows, baselines, windows, cfg, new_labels):
     """rows: latest price per (window, city) for windows that are still free. windows: id -> Window."""
     wish, other = top(ranked(rows, baselines, windows, cfg), cfg)
-    lines = [fmt_row(r, baselines.get((r["code"], r["kind"])), cfg) for r in wish]
+    lines = [fmt_row(r, baselines.get(bkey(r)), cfg) for r in wish]
     if other:
-        lines.append("Surprise: " + fmt_row(other, baselines.get((other["code"], other["kind"])), cfg))
+        lines.append("Surprise: " + fmt_row(other, baselines.get(bkey(other)), cfg))
     if not lines:
         lines.append("No priced trips fit your free dates yet.")
     if new_labels:  # counts only: event titles never go into a push

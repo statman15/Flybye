@@ -76,6 +76,8 @@ Each one ends with something we both use.
 
 ## Open
 
+- **Usual price = Google's typical range (2026-10-19).** For wish cities, the usual price is the middle of Google's `typical_price_range` (built from its own fare history) for that city, trip type and departure month: one google_flights lookup, kept 30 days, at most `typical_per_run` (4) a day, nearest months first. Other cities, and wish cities until their lookup happens, use the median of our own stored prices.
+
 - **Flexible longer trips (2026-10-19).** Explore without dates (`travel_duration=2`) returns each city's cheapest ~1-week round trip over ~6 months, one date pair per city, any weekday (Asia: Tokyo Sun Dec 6 - Tue Dec 15, JAL $1,909 for 2). Searched once a week per area (3 searches), kept when the dates are 3-17 weeks out and free in every calendar, shown under Longer trips tagged "Flexible dates". Fixed Sat-Sat windows still run alongside.
 
 - **Prices are totals for 2 (checked 2026-10-19).** Explore and google_flights both return the total for `adults` (Explore LAX: $278 for 1 adult, $556 for 2; NRT: $1,055 and $2,109). Stored prices stay totals; the app and pushes show them divided by `adults` (per person), and the Google Flights link opens for 1 adult to match.

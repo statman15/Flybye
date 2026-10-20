@@ -146,6 +146,21 @@ def test_flexible_longer_trips_kept_when_free_searched_weekly_and_still_shown_ne
     assert "long:2026-12-04:2026-12-14" in {w["id"] for w in st.fs.data["spaces/s1/suggestions/current"]["windows"]}
 
 
+def test_google_typical_range_becomes_the_usual_price_for_that_city_type_and_month():
+    st, f = fresh(), Fakes()
+    run(date(2026, 10, 17), f, st)
+    t = st.fs.docs("spaces/s1/typical")
+    assert 0 < len(t) <= CFG["search"]["typical_per_run"]
+    tid, doc = sorted(t.items())[0]
+    assert doc == {"low": 390, "high": 740, "at": "2026-10-17"}               # flights.json's typical_price_range
+    code, kind, month = tid.split("_")
+    base = main.baselines(st, [{"code": code, "kind": kind, "out": month + "-15"}], "9999", CFG)
+    assert base[(code, kind, month)] == 565                                   # the middle of the range
+    f.params.clear()
+    run(date(2026, 10, 18), f, st)
+    assert len(st.fs.docs("spaces/s1/typical")) > len(t)                      # the next ones, not the same again
+
+
 def test_every_daily_run_writes_the_suggestions_doc():
     st, f = fresh(), Fakes()
     run(date(2026, 10, 17), f, st)                              # a Saturday: no summary, still published
@@ -208,7 +223,7 @@ def test_weekly_cap_checked_before_spending_a_confirm():
     st, f = fresh(), Fakes(lowest=350)
     for d in ("2026-10-12", "2026-10-13"):
         st.add_alert({"at": d, "code": "X", "out": "a", "ret": "b", "price": 1, "kind": "weekend"})
-    run(date(2026, 10, 17), f, st)
+    run(date(2026, 10, 17), f, st, {**CFG, "search": {**CFG["search"], "typical_per_run": 0}})  # typical lookups are google_flights too
     assert not [p for p in f.params if p["engine"] == "google_flights" and p.get("arrival_id") != "OPO"]
 
 
