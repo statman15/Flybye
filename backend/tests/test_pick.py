@@ -139,7 +139,7 @@ def test_avoided_airlines_are_dropped_and_preferred_ranked_higher():
 
 def test_fmt_row():
     t = pick.fmt_row(row(price=410), 533, CFG)
-    assert t == "Denver · Fri Nov 13–Sun Nov 15 · $410 for 2 (23% under usual) · 2h56 nonstop · hotel ~$150"
+    assert t == "Denver · Fri Nov 13–Sun Nov 15 · $205 per person (23% under usual) · 2h56 nonstop · hotel ~$150"
 
 
 def test_summary_top_three_wish_plus_one_surprise():
@@ -170,8 +170,8 @@ def test_suggestions_doc_shape():
     assert p["weather"] is None and p["airline_code"] == "UA"
     assert set(p["score"]) == {"total", "under_pct", "hours", "wish", "holiday", "weather", "airline"}
     assert p["score"]["airline"] == 8 and p["score"]["wish"] == 10 and p["score"]["under_pct"] == 40.0
-    assert p["usual"] == 500 and p["wish"] is True and p["name"] == "Denver"
-    assert p["link"].startswith("https://www.google.com/travel/flights?q=") and "DEN" in p["link"] and "for%202%20adults" in p["link"]
+    assert p["usual"] == 250 and p["price"] == 150 and p["wish"] is True and p["name"] == "Denver"
+    assert p["link"].startswith("https://www.google.com/travel/flights?q=") and "DEN" in p["link"]
     assert next(p for p in first["picks"] if p["code"] == "BNA")["usual"] is None
     assert [(t["code"], t["window_id"]) for t in doc["top"]][-1] == ("BNA", WE.id)   # 3 wish picks + the surprise
     assert len(doc["top"]) == 4 and sum(t["wish"] for t in doc["top"]) == 3

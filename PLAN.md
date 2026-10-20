@@ -76,6 +76,6 @@ Each one ends with something we both use.
 
 ## Open
 
-- **Prices are totals for 2 (checked 2026-10-19).** Explore and google_flights both return the total for `adults` (Explore LAX: $278 for 1 adult, $556 for 2; NRT: $1,055 and $2,109). The Google Flights link adds "for 2 adults" so it shows the same total.
+- **Prices are totals for 2 (checked 2026-10-19).** Explore and google_flights both return the total for `adults` (Explore LAX: $278 for 1 adult, $556 for 2; NRT: $1,055 and $2,109). Stored prices stay totals; the app and pushes show them divided by `adults` (per person), and the Google Flights link opens for 1 adult to match.
 
 - `hotel_price` units (per night or per stay).

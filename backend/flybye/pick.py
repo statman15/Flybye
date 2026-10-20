@@ -105,19 +105,23 @@ def _d(iso):
     return f"{d:%a %b} {d.day}"
 
 
+def each(price, cfg):
+    """Searches return the total for every traveler (search.adults); people read prices per person, like Google Flights."""
+    return round(price / cfg["search"]["adults"]) if price else price
+
+
 def fmt_row(row, base, cfg):
     city = city_for(row["code"], cfg)
     name = city["name"] if city else row["name"]
     vs = f" ({round((base - row['price']) / base * 100)}% under usual)" if base and row["price"] < base else ""
     stops = "nonstop" if not row["stops"] else f"{row['stops']} stop"
     hotel = f" · hotel ~${round(row['hotel'])}" if row.get("hotel") else ""
-    return (f"{name} · {_d(row['out'])}–{_d(row['ret'])} · ${round(row['price'])} for {cfg['search']['adults']}{vs}"
+    return (f"{name} · {_d(row['out'])}–{_d(row['ret'])} · ${each(row['price'], cfg)} per person{vs}"
             f" · {row['minutes'] // 60}h{row['minutes'] % 60:02d} {stops}{hotel}")
 
 
 def flights_link(row, cfg):
-    # prices here are totals for every traveler, so the link asks Google for the same number of adults
-    q = f"Flights to {row['code']} from {cfg.get('home', 'ORD')} on {row['out']} through {row['ret']} nonstop for {cfg['search']['adults']} adults"
+    q = f"Flights to {row['code']} from {cfg.get('home', 'ORD')} on {row['out']} through {row['ret']} nonstop"  # 1 adult: per person, like the cards
     return "https://www.google.com/travel/flights?q=" + urllib.parse.quote(q)
 
 
@@ -138,8 +142,8 @@ def top(ranked_rows, cfg):
 def _pick(r, baselines, windows, cfg):
     city = city_for(r["code"], cfg)
     why = parts(r, baselines.get((r["code"], r["kind"])), windows[r["window_id"]], cfg)
-    return {"code": r["code"], "name": city["name"] if city else r["name"], "price": r["price"],
-            "usual": baselines.get((r["code"], r["kind"])), "minutes": r["minutes"], "stops": r["stops"],
+    return {"code": r["code"], "name": city["name"] if city else r["name"], "price": each(r["price"], cfg),
+            "usual": each(baselines.get((r["code"], r["kind"])), cfg), "minutes": r["minutes"], "stops": r["stops"],
             "hotel": r.get("hotel"), "airline": r.get("airline"), "airline_code": r.get("airline_code"), "wish": bool(city),
             "link": flights_link(r, cfg), "weather": r.get("weather"), "score": {k: round(v, 1) for k, v in why.items()},
             "country": r.get("country")}
