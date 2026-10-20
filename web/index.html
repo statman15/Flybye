@@ -74,6 +74,7 @@
   details.kind .sec { margin: 14px 16px 6px; font-size: 17px; }
   details.more > summary { margin: 0 16px 12px; color: var(--look); font-weight: 600; cursor: pointer; }
   details.more > summary small { display: block; margin-left: 18px; font-size: 13px; font-weight: 400; color: var(--label2); }
+  .form details.more > summary { color: var(--tint); } /* key instructions: a link, not a "worth a look" */
   .card.look { box-shadow: inset 4px 0 0 var(--look), inset 0 0 0 .5px var(--sep); } /* not on the wish list: an idea, not a target */
   .tag.look { color: var(--look); background: var(--look-fill); }
   .city { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
@@ -87,7 +88,7 @@
   .pill { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 600; text-decoration: none; color: var(--on-tint); background: var(--tint); }
   .pill:active { transform: scale(.97); opacity: .9; }
   .pill.quiet { color: var(--tint); background: var(--fill); }
-  .pill.small { min-height: 36px; padding: 0 16px; margin-top: 10px; }
+  .pill.small { min-height: 44px; padding: 0 16px; margin-top: 10px; }
   .pill:disabled { opacity: .5; }
 
   .empty { display: grid; justify-items: center; gap: 6px; padding: 56px 32px; text-align: center; }
@@ -105,9 +106,11 @@
   .form .check input { width: 22px; height: 22px; accent-color: var(--tint); }
   .kind + .kind { padding-top: 12px; box-shadow: inset 0 .5px 0 var(--sep); }
   .seg { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--fill); margin-top: 10px; }
-  .seg button { flex: 1; min-height: 34px; border-radius: 8px; font-size: 15px; font-weight: 500; text-align: center; }
+  .seg button { flex: 1; min-height: 44px; border-radius: 8px; font-size: 15px; font-weight: 500; text-align: center; }
   .seg button[aria-pressed=true] { font-weight: 600; background: var(--group); box-shadow: 0 2px 6px rgba(0, 0, 0, .12); }
-  button.tag { min-height: 32px; }
+  button.tag { position: relative; min-height: 32px; } /* looks 32px, taps 44px */
+  button.tag::after { content: ''; position: absolute; inset: -6px -2px; }
+  .rows button:disabled { opacity: .6; }
   .remove { display: block; width: 100%; min-height: 44px; margin-top: 10px; border-radius: 10px; text-align: center; color: var(--danger); background: var(--fill); }
 
   /* Calendar rows */
@@ -133,6 +136,7 @@
   @media (prefers-reduced-transparency: reduce) { .tabs { background: var(--group); -webkit-backdrop-filter: none; backdrop-filter: none; } }
   .tabs button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     border-radius: 999px; font-size: 11px; font-weight: 600; text-align: center; color: var(--label2); }
+  .tabs button span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tabs button .ic { width: 25px; height: 25px; }
   .tabs button { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } /* large text: labels shorten, the dock stays on screen */
   .tabs button[aria-selected=true] { color: var(--tint); background: var(--fill); }
@@ -144,13 +148,15 @@
   .rank { flex-basis: 100%; margin-top: 8px; font-size: 15px; }
   .rank p { display: flex; justify-content: space-between; margin: 2px 0; }
   .rank .total { padding-top: 4px; box-shadow: inset 0 .5px 0 var(--sep); }
-  .back { padding: 4px 0; color: var(--tint); font-weight: 600; }
+  .back { display: inline-flex; align-items: center; min-height: 44px; margin: -6px 0; padding: 0; color: var(--tint); font-weight: 600; }
   .legs { padding: 4px 16px; list-style: none; }
   .legs li { display: grid; gap: 2px; padding: 10px 0; overflow-wrap: anywhere; }
   .legs li + li { box-shadow: inset 0 .5px 0 var(--sep); }
   .errs li { font-size: 14px; }
   .hint { margin: 0; font-size: 13px; color: var(--label2); overflow-wrap: anywhere; }
-  .hint a { color: var(--tint); }
+  .form details.more > summary { margin: 0; padding: 12px 0; min-height: 44px; }
+  ol.hint { margin: 0 0 8px; padding-left: 20px; }
+  .hint a { display: inline-block; padding: 14px 0; margin: -14px 0; color: var(--tint); }
   .bar { height: 10px; margin-top: 10px; border-radius: 999px; overflow: hidden; background: var(--fill-strong); }
   .bar i { display: block; height: 100%; background: var(--tint); }
   .spin { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; border: 2px solid var(--fill-strong); border-top-color: var(--tint); border-radius: 50%; animation: spin .8s linear infinite; }
@@ -192,11 +198,11 @@
 
 <nav class="dock" id="dock" hidden>
   <div id="tabs" class="tabs" role="tablist" aria-label="Sections">
-    <button role="tab" data-go="trips" aria-selected="true"><svg class="ic" aria-hidden="true"><use href="#i-trips"/></svg>Trips</button>
-    <button role="tab" data-go="wish" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-wish"/></svg>Wish list</button>
-    <button role="tab" data-go="settings" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg>Settings</button>
-    <button role="tab" data-go="cal" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg>Calendar</button>
-    <button role="tab" data-go="activity" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-act"/></svg>Activity</button>
+    <button role="tab" data-go="trips" aria-selected="true"><svg class="ic" aria-hidden="true"><use href="#i-trips"/></svg><span>Trips</span></button>
+    <button role="tab" data-go="wish" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-wish"/></svg><span>Wishes</span></button>
+    <button role="tab" data-go="settings" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg><span>Settings</span></button>
+    <button role="tab" data-go="cal" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg><span>Calendar</span></button>
+    <button role="tab" data-go="activity" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-act"/></svg><span>Activity</span></button>
   </div>
 </nav>
 

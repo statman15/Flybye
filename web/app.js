@@ -15,10 +15,11 @@ const DEFAULT_SETTINGS = { home: 'ORD',
   alerts: { deal_ratio: 0.8, max_instant_per_week: 2, repeat_drop: 0.9 },
   score: { hour_penalty: 2, wish_bonus: 10, holiday_bonus: 5, weather_bonus: 10, airline_bonus: 8 },
   airlines: { prefer: [], avoid: [] }, weather: { min_f: 65, max_f: 85 } };
+const num = el => (el.value.trim() === '' ? NaN : +el.value); // an empty field must not become 0
 const AIRPORT = /^[A-Z]{3}$/, IATA = /^[A-Z0-9]{2}$/, EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Session state: who is signed in, which spaces they are in, and the one they are looking at.
-let me = '', isAdmin = false, spaces = [], S = null, tab = 'trips', sugg = null, tripKey = '', armed = '';
+let me = '', isAdmin = false, spaces = [], S = null, tab = 'trips', sugg = null, tripKey = '', armed = '', tripY = 0;
 const sref = (...p) => doc(db, 'spaces', S.sid, ...p);
 const settingsRef = () => sref('settings', 'main');
 const keysRef = () => sref('private', 'keys');
@@ -40,7 +41,7 @@ async function mut(ref, fn, missing = 'Nothing saved there yet.') {
   if (!snap.exists()) throw new Error(missing);
   await updateDoc(ref, fn(snap.data()));
 }
-const mutate = fn => mut(settingsRef(), fn, 'No settings yet. The daily run creates them the first time it runs.');
+const mutate = fn => mut(settingsRef(), fn, 'No settings yet. The morning search creates them the first time it runs.');
 // Keys doc: created on first save.
 async function writeKeys(fn) {
   const snap = await getDoc(keysRef());
@@ -88,14 +89,22 @@ const gatePicker = () => showGate(`<div class="head"><h1>Pick a space</h1><p cla
 // --- Tabs. Setup, Admin and Trip are screens, not tabs: no dock button, reached from elsewhere.
 const views = { trips: renderTrips, wish: renderWish, settings: renderSettings, cal: renderCal, activity: renderActivity, setup: renderSetup, admin: renderAdmin, trip: renderTrip };
 const refresh = () => guard($('#' + tab), views[tab]);
-async function go(t) {
-  tab = t;
+// Screen changes are history entries (same URL: the hash belongs to push links), so Android's back button walks them.
+async function go(t, { y = 0, push = true, replace = false } = {}) {
+  if (replace) history.replaceState({ tab: t }, '');
+  else if (push && t !== tab) history.pushState({ tab: t }, '');
+  tab = t; armed = '';
   for (const s of document.querySelectorAll('main > [data-tab]')) { s.hidden = s.dataset.tab !== t; if (s.hidden && s.id !== 'gate') s.innerHTML = ''; }
   for (const b of document.querySelectorAll('#tabs button')) b.setAttribute('aria-selected', b.dataset.go === (t === 'trip' ? 'trips' : t));
   $('#dock').hidden = false;
   await refresh();
-  scrollTo(0, 0);
+  scrollTo(0, y);
 }
+
+addEventListener('popstate', e => {
+  if (!e.state?.tab || !S || $('#gate:not([hidden])')) return;
+  go(e.state.tab, { push: false, y: tab === 'trip' && e.state.tab === 'trips' ? tripY : 0 });
+});
 
 // Pull down from the top of a tab to reload it (phones have no reload button in a home-screen app).
 // Android's WebView can end the gesture with touchcancel instead of touchend, so the distance comes from touchmove.
@@ -141,13 +150,12 @@ const acts = {
     a[el.dataset.list] = a[el.dataset.list].filter(c => c !== el.dataset.code);
     return { airlines: a };
   })),
-  'mem-del': el => act(async () => {
+  'mem-del': el => arm(el, 'mem:' + el.dataset.email) && act(async () => {
     await mut(doc(db, 'spaces', S.sid), sp => ({ members: sp.members.filter(m => m !== el.dataset.email || m === sp.owner) }), 'Space not found.');
   }),
-  'cal-del': el => act(() => writeKeys(k => ({ calendars: (k.calendars || []).filter((_, i) => i !== +el.dataset.i) }))),
+  'cal-del': el => arm(el, 'cal:' + el.dataset.i) && act(() => writeKeys(k => ({ calendars: (k.calendars || []).filter((_, i) => i !== +el.dataset.i) }))),
   'admin-del': async el => {
-    if (armed !== el.dataset.sid) { armed = el.dataset.sid; el.textContent = 'Tap again to remove'; return; }
-    armed = '';
+    if (!arm(el, el.dataset.sid)) return;
     await act(async () => {
       await deleteDoc(doc(db, 'spaces', el.dataset.sid, 'private', 'keys')); // keys first: the rules refuse the space delete while they exist
       await deleteDoc(doc(db, 'spaces', el.dataset.sid));
@@ -155,11 +163,20 @@ const acts = {
   },
   rank: el => { const p = el.nextElementSibling; p.hidden = !p.hidden; el.setAttribute('aria-expanded', !p.hidden); },
 };
+// Two taps to remove: the first turns the button into "Tap again to remove".
+function arm(el, key) {
+  if (armed === key) { armed = ''; return true; }
+  armed = key; el.textContent = 'Tap again to remove';
+  return false;
+}
 async function act(fn) { try { await fn(); await refresh(); } catch (e) { toast(e.message); } }
 
 document.addEventListener('click', async ev => {
   const nav = ev.target.closest('[data-go]');
-  if (nav) return void go(nav.dataset.go);
+  if (nav) {
+    if (nav.classList.contains('back') && tab === 'trip') return void (history.state?.tab === 'trip' ? history.back() : go('trips', { y: tripY, replace: true }));
+    return void go(nav.dataset.go);
+  }
   const el = ev.target.closest('[data-act]');
   if (el && acts[el.dataset.act]) await acts[el.dataset.act](el);
 });
@@ -175,14 +192,16 @@ const forms = {
       return { cities: [...cities, { name, airports, trips: Object.keys(KINDS) }] };
     });
     await renderWish();
+    toast(`Added ${name}`);
   },
   setForm: async f => {
     const trips = {}, basics = readBasics(f);
     for (const k of Object.keys(KINDS)) {
-      const min = +f[`${k}-min`].value, max = +f[`${k}-max`].value;
-      if (![min, max].every(n => Number.isInteger(n) && n >= 1 && n <= 52) || min >= max) throw new Error(`${KINDS[k]}: weeks need two whole numbers, the first smaller than the second.`);
+      const min = num(f[`${k}-min`]), max = num(f[`${k}-max`]);
+      if (![min, max].every(n => Number.isInteger(n) && n >= 1 && n <= 52) || min >= max) throw new Error(`${KINDS[k]}: fill in two whole numbers of weeks, the first smaller than the second.`);
       trips[k] = { enabled: f[`${k}-on`].checked, weeks: [min, max] };
     }
+    if (!Object.values(trips).some(t => t.enabled)) throw new Error('Turn on at least one trip type.');
     const nights = f.nights.value.split(/[\s,]+/).filter(Boolean).map(Number);
     if (!nights.length || !nights.every(n => Number.isInteger(n) && n >= 1 && n <= 30)) throw new Error('Nights are whole numbers from 1 to 30.');
     trips.long.nights = nights;
@@ -200,21 +219,24 @@ const forms = {
       return { airlines: a };
     });
     await renderSettings();
+    toast(`Added ${code}`);
   },
   memberForm: async f => {
     const email = f.email.value.trim().toLowerCase();
     if (!EMAIL.test(email)) throw new Error('That doesn’t look like an email address.');
     await mut(doc(db, 'spaces', S.sid), sp => { if (sp.members.includes(email)) throw new Error(`${email} is already in this space.`); return { members: [...sp.members, email] }; }, 'Space not found.');
     await renderSettings();
+    toast(`Added ${email}`);
   },
   calForm: async f => {
     const name = f.name.value.trim(), url = f.url.value.trim();
     if (!name) throw new Error('Give the calendar a name.');
-    let ok = /^https:\/\//i.test(url);
-    try { new URL(url); } catch { ok = false; }
-    if (!ok) throw new Error('Calendar links start with https://.');
+    let u; try { u = new URL(url); } catch { /* not a link at all */ }
+    if (/^webcal:/i.test(url)) throw new Error('Change webcal:// to https:// at the start of the link.');
+    if (u?.protocol !== 'https:' || !/\.ics$/i.test(u.pathname)) throw new Error('That should be the secret address ending in .ics, from Google Calendar settings. It starts with https://.');
     await writeKeys(k => ({ calendars: [...(k.calendars || []), { name, url }] }));
     await refresh();
+    toast(`Added ${name}`);
   },
   keyForm: async f => {
     const patch = {};
@@ -246,18 +268,18 @@ document.addEventListener('submit', async ev => {
 
 // Home airport + the weather range, shared by the Settings form and the setup form.
 function readBasics(f) {
-  const home = f.home.value.trim().toUpperCase(), min = +f.min_f.value, max = +f.max_f.value;
+  const home = f.home.value.trim().toUpperCase(), min = num(f.min_f), max = num(f.max_f);
   if (!AIRPORT.test(home)) throw new Error('Home airport is 3 letters, like ORD.');
-  if (![min, max].every(n => Number.isInteger(n) && n >= -20 && n <= 120) || min >= max) throw new Error('Weather range: two whole °F numbers, the first lower than the second.');
-  const cap = +f.cap.value;
-  if (!Number.isInteger(cap) || cap < 0 || cap > 100000) throw new Error('Searches per month: a whole number (SerpApi’s free plan has 250).');
+  if (![min, max].every(n => Number.isInteger(n) && n >= -20 && n <= 120) || min >= max) throw new Error('Weather range: fill in two whole °F numbers, the first lower than the second.');
+  const cap = num(f.cap);
+  if (!Number.isInteger(cap) || cap < 1 || cap > 1000) throw new Error('Searches per month: a whole number from 1 to 1000 (SerpApi’s free plan has 250).');
   return s => ({ home, weather: { min_f: min, max_f: max }, search: { ...s.search, cap } });
 }
 const basicsFields = s => `<label>Home airport<input name="home" maxlength="3" autocapitalize="characters" value="${esc(s.home)}"></label>
   <div class="two"><label>Ideal high, from (°F)<input type="number" inputmode="numeric" name="min_f" value="${esc(s.weather?.min_f ?? 65)}"></label>
   <label>to (°F)<input type="number" inputmode="numeric" name="max_f" value="${esc(s.weather?.max_f ?? 85)}"></label></div>
-  <label>Searches per month<input type="number" inputmode="numeric" min="0" name="cap" value="${esc(s.search?.cap ?? 230)}"></label>
-  <p class="hint">The daily run spreads these over the month, and tapping a trip uses 2. SerpApi’s free plan has 250.</p>`;
+  <label>Searches per month<input type="number" inputmode="numeric" min="1" name="cap" value="${esc(s.search?.cap ?? 230)}"></label>
+  <p class="hint">The morning search spreads these over the month, and tapping a trip uses 2. SerpApi’s free plan has 250.</p>`;
 
 // --- Trips
 const stopsText = n => (n ? `${n} stop${n > 1 ? 's' : ''}` : 'Nonstop');
@@ -303,7 +325,7 @@ async function renderTrips() {
   const snap = await getDoc(sref('suggestions', 'current'));
   if (!snap.exists()) {
     sugg = null;
-    el.innerHTML = `<div class="head"><h1>Trips</h1><p class="sub">${esc(S.name)}</p></div><div class="empty"><h2>No suggestions yet</h2><p>The daily search writes them every morning.</p></div>`;
+    el.innerHTML = `<div class="head"><h1>Trips</h1><p class="sub">${esc(S.name)}</p></div><div class="empty"><h2>No suggestions yet</h2><p>The morning search writes them every morning.</p></div>`;
     return;
   }
   const s = sugg = snap.data();
@@ -334,7 +356,7 @@ $('#trips').addEventListener('toggle', ev => { const i = Number(ev.target.datase
 $('#trips').addEventListener('click', ev => {
   if (ev.target.closest('a, [data-act]')) return;
   const card = ev.target.closest('[data-trip]');
-  if (card) { tripKey = card.dataset.trip; go('trip'); }
+  if (card) { tripKey = card.dataset.trip; tripY = scrollY; go('trip'); }
 });
 
 // #trip=<window_id>|<code>&space=<sid> (from a push) opens that space and scrolls to the card.
@@ -386,7 +408,7 @@ async function renderTrip() {
   const el = $('#trip'), key = tripKey, i = key.lastIndexOf('|'), wid = key.slice(0, i), code = key.slice(i + 1);
   const w = windowOf(sugg, wid) || { id: wid };
   const p = [...(sugg?.top || []), ...(w.picks || [])].find(x => x.window_id === wid && x.code === code) || (w.picks || []).find(x => x.code === code);
-  if (!p) return go('trips');
+  if (!p) return go('trips', { replace: true });
   el.innerHTML = `<div class="head"><button class="back" data-go="trips">‹ Trips</button><h1>${esc(p.name)}</h1>
     <p class="sub">${esc(dates(w))}${w.holiday ? ' · ' + esc(w.holiday) : ''}</p></div>
     <div class="pad"><p class="meta">${[money(p.price) + ' per person', dur(p.minutes), stopsText(p.stops), p.airline].filter(Boolean).map(esc).join(' · ')}</p>
@@ -414,6 +436,7 @@ async function renderWish() {
     ${cities.map((c, i) => `<div class="group card" data-i="${i}">
       <div class="card-top"><span class="city">${esc(c.name)}</span><span class="muted">${esc((c.airports || []).join(', '))}</span></div>
       <div class="tags">${Object.entries(KINDS).map(([k, label]) => `<button class="tag${(c.trips || []).includes(k) ? ' on' : ''}" data-kind="${esc(k)}" aria-pressed="${(c.trips || []).includes(k)}">${esc(label)}</button>`).join('')}</div>
+      ${(c.trips || []).length ? '' : '<p class="meta">Not searched: turn on a trip type</p>'}
       <div class="seg" role="group" aria-label="Stops"><button data-stops="1" aria-pressed="${c.stops !== 2}">Nonstop</button><button data-stops="2" aria-pressed="${c.stops === 2}">1 stop OK</button></div>
       <button class="remove" data-remove>Remove ${esc(c.name)}</button>
     </div>`).join('') || '<div class="empty"><p>No cities yet.</p></div>'}
@@ -430,7 +453,9 @@ $('#wish').addEventListener('click', async ev => {
   if (!card) return;
   const i = +card.dataset.i, name = card.querySelector('.city').textContent;
   const kind = ev.target.closest('[data-kind]')?.dataset.kind, stops = ev.target.closest('[data-stops]')?.dataset.stops;
-  if (!kind && !stops && !ev.target.closest('[data-remove]')) return;
+  const rm = ev.target.closest('[data-remove]');
+  if (!kind && !stops && !rm) return;
+  if (rm && !arm(rm, 'wish:' + name)) return;
   try {
     await mutate(s => {
       const cities = s.cities || [];
@@ -447,33 +472,38 @@ $('#wish').addEventListener('click', async ev => {
 
 // --- Calendars + keys blocks (Settings and Setup both show them). Keys are never put back into the page: the fields stay empty and blank means "keep".
 const host = u => { try { return new URL(u).host; } catch { return ''; } };
-const calBlock = k => `<h2 class="sec">Calendars<small>A trip is free only if every calendar here is free.</small></h2>
+const calBlock = (k, n = '') => `<h2 class="sec">${n && '1. '}Calendars<small>${n && 'Required. '}A trip is free only if every calendar here is free.</small></h2>
   ${(k.calendars || []).map((c, i) => `<div class="group card card-top"><span><span class="city">${esc(c.name)}</span><br><span class="muted">${esc(host(c.url))}</span></span>
     <button class="tag" data-act="cal-del" data-i="${i}" aria-label="Remove ${esc(c.name)}">Remove</button></div>`).join('') || '<p class="pad muted">No calendars yet.</p>'}
   <form class="group form" id="calForm" novalidate>
     <label>Name<input name="name" maxlength="40" autocomplete="off" placeholder="Chris, Laura, Work…"></label>
     <label>Secret iCal link<input name="url" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://calendar.google.com/…"></label>
-    <p class="hint">Google Calendar on a computer → Settings → pick the calendar → Integrate calendar → “Secret address in iCal format”. Anyone with this link can read the calendar, so don’t share it.</p>
+    <p class="hint">Google Calendar on a computer → Settings → pick the calendar → Integrate calendar → “Secret address in iCal format”. Do this on a computer: the phone app doesn’t show the secret address. <a href="https://calendar.google.com/calendar/r/settings" target="_blank" rel="noopener noreferrer">Open Google Calendar settings</a>. Anyone with this link can read the calendar, so don’t share it.</p>
     <p class="err"></p><button class="pill" type="submit">Add calendar</button></form>`;
-const keysBlock = k => `<h2 class="sec">Keys<small>Used only for this space’s searches.</small></h2>
+const keysBlock = (k, n = '') => `<h2 class="sec">${n && '2. '}Keys<small>${n && 'The SerpApi key is required. '}Used only for this space’s searches.</small></h2>
   <form class="group form" id="keyForm" novalidate>
     <label>SerpApi key${k.serpapi ? ' (saved)' : ''}<input name="serpapi" type="password" autocomplete="off" spellcheck="false" placeholder="${k.serpapi ? 'Leave blank to keep' : 'Paste key'}"></label>
-    <p class="hint"><a href="https://serpapi.com/manage-api-key" target="_blank" rel="noopener noreferrer">Where to get it</a> (finds the flights)</p>
+    <p class="hint">Finds the flights. Free plan: 250 searches a month.</p>
+    <details class="more"><summary>How to get it</summary><ol class="hint"><li>Make a free account at <a href="https://serpapi.com/users/sign_up" target="_blank" rel="noopener noreferrer">serpapi.com/users/sign_up</a> (it asks you to confirm your email and phone).</li>
+      <li>Open <a href="https://serpapi.com/manage-api-key" target="_blank" rel="noopener noreferrer">serpapi.com/manage-api-key</a>.</li><li>Copy “Your Private API Key” and paste it here, then Save keys.</li></ol></details>
     <label>Gemini key${k.gemini ? ' (saved)' : ''}<input name="gemini" type="password" autocomplete="off" spellcheck="false" placeholder="${k.gemini ? 'Leave blank to keep' : 'Paste key'}"></label>
-    <p class="hint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Where to get it</a> (reads which events block a trip)</p>
+    <p class="hint">Reads which calendar events block a trip, and it’s free. Without it events can’t be read, so every event counts as busy.</p>
+    <details class="more"><summary>How to get it</summary><ol class="hint"><li>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a> and sign in with your Google account.</li>
+      <li>Tap “Create API key” (accept the terms if asked).</li><li>Copy the key and paste it here, then Save keys.</li></ol></details>
     <p class="err"></p><button class="pill" type="submit">Save keys</button></form>`;
 
 // --- Setup: a space with no keys or calendars lands here. The rest of the app stays reachable from the dock.
 async function renderSetup() {
   const el = $('#setup');
   const [k, snap] = await Promise.all([getKeys(), getDoc(settingsRef())]);
-  const s = snap.exists() ? snap.data() : null;
-  el.innerHTML = `<div class="head"><h1>Set up ${esc(S.name)}</h1><p class="sub">Add your calendars and keys, then the daily search can start.</p></div>
-    ${calBlock(k)}${keysBlock(k)}
-    <h2 class="sec">Basics</h2>
+  const s = snap.exists() ? snap.data() : null, ready = (k.calendars || []).length && k.serpapi;
+  el.innerHTML = `<div class="head"><h1>Set up ${esc(S.name)}</h1><p class="sub">Add your calendars and keys, then the morning search can start.</p></div>
+    ${calBlock(k, 1)}${keysBlock(k, 1)}
+    <h2 class="sec">3. Home airport &amp; weather</h2>
     ${s ? `<form class="group form" id="basicForm" novalidate>${basicsFields(s)}<p class="err"></p><button class="pill" type="submit">Save</button></form>`
-      : '<p class="pad muted">Home airport and weather range appear here after the first daily run creates your settings.</p>'}
-    <div class="pad"><button class="pill quiet" data-go="wish">Wish list</button> <button class="pill" data-act="setup-done">Done</button></div>`;
+      : '<p class="pad muted">Home airport and weather range appear here after the first morning search creates your settings.</p>'}
+    <div class="pad"><button class="pill quiet" data-go="wish">Wish list</button> <button class="pill" data-act="setup-done"${ready ? '' : ' disabled'}>Done</button>
+      ${ready ? '' : '<p class="hint" style="margin-top:8px">Add a calendar and a SerpApi key to finish.</p>'}</div>`;
 }
 
 // --- Settings
@@ -502,7 +532,7 @@ async function renderSettings() {
         <label>Airline code<input name="code" maxlength="2" autocapitalize="characters" autocomplete="off" placeholder="UA"></label></div>
         <p class="hint">${Object.entries(AIRLINES).map(([c, n]) => esc(`${c} ${n}`)).join(' · ')}</p>
         <p class="err"></p><button class="pill" type="submit">Add airline</button></form>`
-      : '<div class="empty"><p>No settings yet. The daily run creates them the first time it runs.</p></div>'}
+      : '<div class="empty"><p>No settings yet. The morning search creates them the first time it runs.</p></div>'}
     ${calBlock(k)}${keysBlock(k)}
     <h2 class="sec">Members<small>${owner ? 'People who share this space see the same trips and get the same alerts.' : 'Only the owner can change this.'}</small></h2>
     <ul class="group legs">${(S.members || []).map(m => `<li><span>${esc(m)}${m === S.owner ? ' <span class="muted">owner</span>' : ''}</span>
@@ -539,18 +569,19 @@ async function renderActivity() {
   const el = $('#activity');
   const snap = await getDoc(sref('meta', 'activity'));
   if (!snap.exists()) {
-    el.innerHTML = `<div class="head"><h1>Activity</h1></div><div class="empty"><h2>Nothing yet</h2><p>This fills in after the first daily run.</p></div>`;
+    el.innerHTML = `<div class="head"><h1>Activity</h1></div><div class="empty"><h2>Nothing yet</h2><p>This fills in after the first morning search.</p></div>`;
     return;
   }
   const a = snap.data(), used = Number(a.used) || 0, capN = Number(a.cap) || 0, pct = capN > 0 ? Math.min(100, Math.round(used / capN * 100)) : 0;
   el.innerHTML = `<div class="head"><h1>Activity</h1><p class="sub">${esc(S.name)}</p></div>
     <div class="group card"><p class="meta" style="margin:0">Last run <b>${esc(stamp(a.last_run))}</b></p><p class="meta">Next run <b>${esc(stamp(a.next_run))}</b></p></div>
-    <div class="group card"><p class="meta" style="margin:0">Searches this month${a.month ? ' (' + esc(a.month) + ')' : ''}: <b>${esc(used)}</b> of ${esc(capN)}, ${esc(Math.max(0, capN - used))} left</p>
+    <div class="group card"><p class="meta" style="margin:0">Searches this month${a.month ? ' (' + esc(a.month) + ')' : ''}: <b>${esc(used)}</b> ${used > capN ? `used, ${esc(used - capN)} over this month’s limit of ${esc(capN)}` : `of ${esc(capN)}, ${esc(capN - used)} left`}</p>
       <div class="bar" role="img" aria-label="${pct}% of searches used"><i style="width:${pct}%"></i></div></div>
     <div class="group card"><p class="meta" style="margin:0">The AI labelled <b>${esc(a.labelled ?? 0)}</b> events and <b>${esc(a.blocking ?? 0)}</b> block trips.</p>
       <button class="pill small quiet" data-go="cal">See them on Calendar</button></div>
-    <h2 class="sec">Windows checked</h2>
-    <ul class="legs group">${(a.windows || []).map(w => `<li><span>${esc(w.id)}</span><span class="muted">${w.searched_at ? esc(stamp(w.searched_at)) + ' · ' + esc(w.picks ?? 0) + ' picks' : 'not searched'}</span></li>`).join('') || '<li class="muted">None</li>'}</ul>
+    <details class="kind"><summary>Date ranges checked <small>${(a.windows || []).length}</small></summary>
+    <ul class="legs">${(a.windows || []).map(w => { const [, out, ret] = String(w.id).split(':'), n = Number(w.picks) || 0; // id is kind:out:ret
+      return `<li><span>${esc(out && ret ? dates({ out, ret }) : w.id)}</span><span class="muted">${w.searched_at ? esc(stamp(w.searched_at)) + ` · ${n} pick${n === 1 ? '' : 's'}` : 'not searched'}</span></li>`; }).join('') || '<li class="muted">None</li>'}</ul></details>
     <h2 class="sec">Errors</h2>
     ${(a.errors || []).length ? `<ul class="legs group errs">${a.errors.map(e => `<li class="err">${esc(e)}</li>`).join('')}</ul>` : '<p class="pad muted">None. All good.</p>'}`;
 }
@@ -575,6 +606,7 @@ async function enableAlerts() {
   if (!token) throw homeScreen;
   return registerDevice(token, 'web');
 }
+if (native) cap.Plugins.App?.addListener('backButton', ({ canGoBack }) => (canGoBack ? history.back() : cap.Plugins.App.exitApp()));
 if (native) {
   cap.Plugins.FirebaseMessaging.addListener('notificationActionPerformed', ev => {
     const d = ev.notification?.data;
@@ -598,17 +630,18 @@ function paintCal() {
     <ul class="rows">${labels.map(l => `<li><button data-id="${esc(l.id)}">
       <span class="t">${esc(l.title)}</span><span class="chip ${effective(l) ? 'blocks' : ''}">${effective(l) ? 'Blocks' : 'Free'}</span>
       <span class="why">${esc(day(l.start))}${l.all_day ? ' · all day' : ''}${l.override != null ? ' · your call' : ''}${l.why ? ' · ' + esc(l.why) : ''}</span></button></li>`).join('')}</ul>
-    ${labels.length ? '' : '<div class="empty"><h2>Nothing upcoming</h2><p>Events appear after the daily search reads the calendar.</p></div>'}`;
+    ${labels.length ? '' : '<div class="empty"><h2>Nothing upcoming</h2><p>Events appear after the morning search reads the calendar.</p></div>'}`;
 }
 $('#cal').addEventListener('click', async ev => {
-  const l = labels.find(x => x.id === ev.target.closest('[data-id]')?.dataset.id);
-  if (!l) return;
+  const b = ev.target.closest('[data-id]'), l = labels.find(x => x.id === b?.dataset.id);
+  if (!l || b.disabled) return;
+  b.disabled = true; // ignore more taps until the write lands
   const next = !effective(l), override = next === l.block ? null : next; // back to the AI's answer clears the override
   try {
     await updateDoc(sref('labels', l.id), { override });
     l.override = override;
     paintCal();
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast(e.message); b.disabled = false; }
 });
 
 // --- Start: sign in, find this person's spaces, open one.
@@ -617,8 +650,7 @@ async function startSpace(sid) {
   store.set('space', sid);
   const k = await getKeys().catch(() => ({}));
   if (store.get('alerts')) enableAlerts().catch(() => {}); // refresh this phone's token quietly
-  if (hashParams().get('trip')) await go('trips');
-  else await go((k.calendars || []).length ? 'trips' : 'setup');
+  await go(hashParams().get('trip') || (k.calendars || []).length ? 'trips' : 'setup', { replace: true });
 }
 async function boot() {
   me = auth.currentUser.email.toLowerCase();

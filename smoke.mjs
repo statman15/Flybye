@@ -122,6 +122,7 @@ try {
   const dockTab = (page, t) => click(page, `#tabs [data-go=${t}]`);
   const doc = (page, path) => page.evaluate(p => window.__fake.docs[p], path);
   const asTest = () => open({ email: 'test@example.test' });
+  const shots = async (p, n) => { if (process.env.SHOTDIR) { await p.setViewport({ width: 360, height: 780, isMobile: true, hasTouch: true }); await new Promise(r => setTimeout(r, 200)); await p.screenshot({ path: join(process.env.SHOTDIR, n + '.png'), fullPage: true }); } };
   let page;
   await run('sign-in screen', async () => {
     page = await open(null);
@@ -163,6 +164,39 @@ try {
     if (cached.length !== 1) throw new Error('times not cached');
   });
 
+  await run('trip details: back restores the scroll position', async () => {
+    const p = await asTest();
+    await text(p, '#trips', 'Top picks');
+    await p.addStyleTag({ content: 'main { padding-bottom: 1600px; }' });
+    await p.evaluate(() => scrollTo(0, 400));
+    await click(p, '#trips [data-trip] .city');
+    await text(p, '#trip', 'UA 456');
+    await click(p, '#trip .back');
+    await text(p, '#trips', 'Top picks');
+    await p.waitForFunction(() => Math.abs(scrollY - 400) < 5);
+    await p.close();
+  });
+
+  await run('back button walks the screens (Wish list, trip, back, back)', async () => {
+    const p = await asTest();
+    await text(p, '#trips', 'Top picks');
+    await p.addStyleTag({ content: 'main { padding-bottom: 1600px; }' });
+    await dockTab(p, 'wish');
+    await text(p, '#wish', 'Remove');
+    await dockTab(p, 'trips');
+    await text(p, '#trips', 'Top picks');
+    await p.evaluate(() => scrollTo(0, 300));
+    await click(p, '#trips [data-trip] .city');
+    await text(p, '#trip', 'UA 456');
+    if (await p.evaluate(() => location.hash)) throw new Error('screen change touched the hash');
+    await p.goBack();
+    await text(p, '#trips', 'Top picks');
+    await p.waitForFunction(() => Math.abs(scrollY - 300) < 5);
+    await p.goBack();
+    await text(p, '#wish', 'Remove');
+    await p.close();
+  });
+
   await run('trip details: Worker failure falls back', async () => {
     workerMode = 'fail';
     page = await asTest();
@@ -201,6 +235,21 @@ try {
     await click(page, '#addCity button');
     await page.waitForFunction(() => document.querySelectorAll('#wish [data-i]').length === 2);
     const cities = (await doc(page, 'spaces/s1/settings/main')).cities;
+    await page.waitForFunction(() => document.querySelector('#toast').textContent === 'Added Lisbon');
+    await click(page, '#wish [data-kind=weekend]'); // Denver: last trip type off
+    await click(page, '#wish [data-kind=long]');
+    await text(page, '#wish', 'Not searched: turn on a trip type');
+    await click(page, '#wish [data-kind=weekend]');
+    await click(page, '#wish [data-i="1"] [data-remove]');
+    await text(page, '#wish [data-i="1"]', 'Tap again to remove');
+    if ((await doc(page, 'spaces/s1/settings/main')).cities.length !== 2) throw new Error('city removed on the first tap');
+    await click(page, '#wish [data-i="1"] [data-remove]');
+    await page.waitForFunction(() => window.__fake.docs['spaces/s1/settings/main'].cities.length === 1);
+    await set(page, '#addCity [name=name]', 'Lisbon');
+    await set(page, '#addCity [name=airports]', 'lis');
+    await click(page, '#addCity button');
+    await page.waitForFunction(() => window.__fake.docs['spaces/s1/settings/main'].cities.length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('#wish [data-i]').length === 2);
     if (cities[1].airports[0] !== 'LIS' || cities[0].stops !== 2 || !cities[0].trips.includes('long')) throw new Error('wish list not saved: ' + JSON.stringify(cities));
   });
 
@@ -210,7 +259,25 @@ try {
     await set(page, '[name="weekend-min"]', '12');
     await click(page, '#setForm button');
     await text(page, '#setErr', 'first smaller');
+    await set(page, '[name="weekend-min"]', '');
+    await click(page, '#setForm button');
+    await text(page, '#setErr', 'fill in two whole numbers');
     await set(page, '[name="weekend-min"]', '3');
+    await set(page, '#setForm [name=cap]', '');
+    await click(page, '#setForm button');
+    await text(page, '#setErr', 'from 1 to 1000');
+    await set(page, '#setForm [name=cap]', '1001');
+    await click(page, '#setForm button');
+    await text(page, '#setErr', '250');
+    await set(page, '#setForm [name=cap]', '230');
+    await set(page, '#setForm [name=min_f]', '');
+    await click(page, '#setForm button');
+    await text(page, '#setErr', 'first lower');
+    for (const k of ['weekend', '3day', 'long']) await page.$eval(`#setForm [name="${k}-on"]`, el => { el.checked = false; });
+    await set(page, '#setForm [name=min_f]', '60');
+    await click(page, '#setForm button');
+    await text(page, '#setErr', 'Turn on at least one trip type');
+    for (const k of ['weekend', '3day', 'long']) await page.$eval(`#setForm [name="${k}-on"]`, el => { el.checked = true; });
     await set(page, '#setForm [name=min_f]', '90');
     await click(page, '#setForm button');
     await text(page, '#setErr', 'first lower');
@@ -230,6 +297,7 @@ try {
     await set(page, '#airForm [name=code]', 'nk');
     await click(page, '#airForm button');
     await text(page, '#settings', 'NK Spirit');
+    await page.waitForFunction(() => document.querySelector('#toast').textContent === 'Added NK');
     await set(page, '#airForm [name=list]', 'avoid');
     await set(page, '#airForm [name=code]', 'ua');
     await click(page, '#airForm button');
@@ -248,7 +316,11 @@ try {
     await set(page, '#memberForm [name=email]', 'mom@example.test');
     await click(page, '#memberForm button');
     await text(page, '#settings', 'mom@example.test');
-    await click(page, '#settings [data-act=mem-del][data-email="mom@example.test"]');
+    const mem = '#settings [data-act=mem-del][data-email="mom@example.test"]';
+    await click(page, mem);
+    await text(page, '#settings', 'Tap again to remove');
+    if (!(await doc(page, 'spaces/s1')).members.includes('mom@example.test')) throw new Error('member removed on the first tap');
+    await click(page, mem);
     await page.waitForFunction(() => !document.querySelector('#settings').textContent.includes('mom@example.test'));
     const m = (await doc(page, 'spaces/s1')).members;
     if (m.join() !== 'test@example.test,laura@example.test') throw new Error('members: ' + m);
@@ -264,10 +336,19 @@ try {
     await set(page, '#calForm [name=name]', 'Laura');
     await set(page, '#calForm [name=url]', 'http://insecure.example/x.ics');
     await click(page, '#calForm button');
-    await text(page, '#calForm .err', 'start with https://');
+    await text(page, '#calForm .err', 'ending in .ics');
+    await set(page, '#calForm [name=url]', 'webcal://calendar.google.com/calendar/ical/laura-secret/basic.ics');
+    await click(page, '#calForm button');
+    await text(page, '#calForm .err', 'Change webcal:// to https://');
+    await set(page, '#calForm [name=url]', 'https://calendar.google.com/calendar/ical/laura-secret/basic');
+    await click(page, '#calForm button');
+    await text(page, '#calForm .err', 'ending in .ics');
     await set(page, '#calForm [name=url]', 'https://calendar.google.com/calendar/ical/laura-secret/basic.ics');
     await click(page, '#calForm button');
     await page.waitForFunction(() => window.__fake.docs['spaces/s1/private/keys'].calendars.length === 2);
+    await click(page, '#settings [data-act=cal-del][data-i="0"]');
+    await text(page, '#settings', 'Tap again to remove');
+    if ((await doc(page, 'spaces/s1/private/keys')).calendars.length !== 2) throw new Error('calendar removed on the first tap');
     await click(page, '#settings [data-act=cal-del][data-i="0"]');
     await page.waitForFunction(() => window.__fake.docs['spaces/s1/private/keys'].calendars.length === 1);
     await click(page, '#keyForm button');
@@ -284,7 +365,7 @@ try {
     await text(page, '#cal', 'Blocks');
     const html = await page.$eval('#cal', el => el.innerHTML);
     if (html.includes('<img')) throw new Error('event title was not escaped');
-    await click(page, '#cal [data-id=a]');
+    await page.$eval('#cal [data-id=a]', el => { el.click(); el.click(); el.click(); }); // rapid taps: only the first counts
     await text(page, '#cal', 'Free');
     await text(page, '#cal', 'your call');
     await click(page, '#cal [data-id=a]'); // back to the AI's answer clears the override
@@ -299,6 +380,13 @@ try {
     const html = await page.$eval('#activity', el => el.innerHTML), t = await page.$eval('#activity', el => el.textContent);
     if (!/30 of 100, 70 left/.test(t) || !html.includes('width:30%')) throw new Error('searches bar: ' + t);
     if (!/12 events and 4 block/.test(t) || !t.includes('not searched') || !t.includes('3 picks')) throw new Error('activity content: ' + t);
+    if (!t.includes('Date ranges checked') || t.includes('Windows')) throw new Error('activity heading: ' + t);
+    if (await page.$eval('#activity details', d => d.open)) throw new Error('date ranges should start collapsed');
+    await page.evaluate(() => { const a = window.__fake.docs['spaces/s1/meta/activity']; a.used = 120; a.windows.push({ id: 'weekend:2026-11-01:2026-11-03', searched_at: '2026-10-18T10:01:00Z', picks: 1 }); });
+    await dockTab(page, 'trips'); await dockTab(page, 'activity');
+    await text(page, '#activity', 'over this month’s limit of 100');
+    const t2 = await page.$eval('#activity', el => el.textContent);
+    if (!t2.includes('120 used, 20 over') || !t2.includes('Sun, Nov 1 → Tue, Nov 3 · 3 days') || !t2.includes('1 pick') || t2.includes('1 picks') || t2.includes('weekend:2026')) throw new Error('activity v2: ' + t2);
     if (html.includes('<img') || html.includes('w2 <b>')) throw new Error('activity text was not escaped');
     await click(page, '#activity [data-go=cal]');
     await text(page, '#cal', 'Dentist');
@@ -321,6 +409,17 @@ try {
     const dom = secs.find(s => s.t.startsWith('Longer trips') && !s.t.includes('International')), intl = by('Longer trips · International');
     if (!dom.cities.includes('Miami') || dom.cities.includes('Paris') || !dom.more.includes('Atlanta') || dom.cities.includes('Atlanta')) throw new Error('domestic long: ' + JSON.stringify(dom));
     if (!intl.cities.includes('Paris') || intl.cities.includes('Miami')) throw new Error('international: ' + JSON.stringify(intl));
+  });
+
+  await run('screenshots (only with SHOTDIR)', async () => {
+    if (!process.env.SHOTDIR) return;
+    const p = await asTest();
+    await p.setViewport({ width: 360, height: 780, isMobile: true, hasTouch: true });
+    await text(p, '#trips', 'Top picks');
+    await p.$eval('#trips details.kind', d => { d.open = true; });
+    await shots(p, 'trips');
+    for (const t of ['activity', 'wish', 'settings']) { await dockTab(p, t); await new Promise(r => setTimeout(r, 300)); await shots(p, t); }
+    await p.close();
   });
 
   await run('pull down to refresh', async () => {
@@ -403,6 +502,9 @@ try {
   await run('setup flow', async () => {
     page = await open({ email: 'fresh@example.test' });
     await text(page, '#setup', 'Set up Fresh');
+    await shots(page, 'setup');
+    if (!(await page.$eval('#setup [data-act=setup-done]', b => b.disabled))) throw new Error('Done should wait for a calendar and a SerpApi key');
+    if (!(await page.$eval('#setup', el => el.textContent)).includes('1. Calendars')) throw new Error('setup sections not numbered');
     await set(page, '#calForm [name=name]', 'Fresh cal');
     await set(page, '#calForm [name=url]', 'https://calendar.google.com/calendar/ical/fresh/basic.ics');
     await click(page, '#calForm button');
@@ -410,6 +512,7 @@ try {
     await set(page, '#keyForm [name=serpapi]', 'sk-fresh');
     await click(page, '#keyForm button');
     await text(page, '#setup', 'SerpApi key (saved)');
+    if (await page.$eval('#setup [data-act=setup-done]', b => b.disabled)) throw new Error('Done should be on once both are saved');
     await set(page, '#basicForm [name=min_f]', '70');
     await set(page, '#basicForm [name=max_f]', '60');
     await click(page, '#basicForm button');
