@@ -137,6 +137,7 @@ try {
     if (!html.includes('40% under usual')) throw new Error('% under usual missing');
     if (html.includes('javascript:')) throw new Error('unsafe link rendered');
     if (!html.includes('78° high')) throw new Error('weather missing from the compact rows');
+    if (!html.includes('Sun, Nov 8 · 3 days')) throw new Error('trip length missing next to the dates');
     if (!html.includes('Typically 45°/18° · 30% rain')) throw new Error('typical line missing');
     if (!html.includes('United')) throw new Error('airline missing');
     if (!(await page.$eval('#trips .rank', el => el.hidden))) throw new Error('rank panel should start closed');
