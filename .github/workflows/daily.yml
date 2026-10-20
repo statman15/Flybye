@@ -3,9 +3,9 @@ name: Daily sweep
 # Every morning: test, then for each space: its calendars -> free windows -> its SerpApi searches -> Firestore + push.
 on:
   schedule:
-    # Off the top of the hour: GitHub delays or drops busy :00 schedules (it skipped 13:00 on Oct 18 and 19).
-    - cron: "17 12 * * *"  # 07:17 Chicago in summer, 06:17 in winter
-    - cron: "47 15 * * *"  # backup in case the first is dropped: spaces that already ran today are skipped
+    # The Worker's Cloudflare cron starts this at 12:17 UTC (07:17 Chicago in summer). GitHub's own schedule fires hours
+    # late or not at all, so it is only the fallback: spaces that already ran today are skipped.
+    - cron: "47 14 * * *"
   workflow_dispatch:
     inputs:
       command:
@@ -33,7 +33,7 @@ jobs:
         run: python -m flybye "$CMD"
         env:
           CMD: ${{ inputs.command || 'daily' }}
-          FLYBYE_BACKUP: ${{ github.event.schedule == '47 15 * * *' && '1' || '' }}
+          FLYBYE_BACKUP: ${{ github.event_name == 'schedule' && '1' || '' }}
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
           APP_URL: https://statman15.github.io/Flybye/
       # The old single-user keys are only for the one-time move into the first space; after that each space keeps its own.

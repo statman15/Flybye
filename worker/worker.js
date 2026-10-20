@@ -138,7 +138,18 @@ export async function times(req, env, fetchFn = fetch) {
   return { outbound: best.flights.map(leg), return: back, price: best.price, booking_link: d1.search_metadata?.google_flights_url || null };
 }
 
+// The morning search runs in GitHub Actions, but GitHub's own schedule fires hours late or not at all.
+// Cloudflare's cron is on time, so it starts the workflow (a fine-grained token that can only run this repo's Actions).
+export async function startMorningSearch(env, fetchFn = fetch) {
+  if (!env.GH_DISPATCH_TOKEN) return;
+  const r = await fetchFn("https://api.github.com/repos/statman15/Flybye/actions/workflows/daily.yml/dispatches", {
+    method: "POST", body: JSON.stringify({ ref: "main" }),
+    headers: { authorization: `Bearer ${env.GH_DISPATCH_TOKEN}`, accept: "application/vnd.github+json", "user-agent": "flybye-worker" } });
+  if (r.status !== 204) throw new Error(`GitHub dispatch failed: ${r.status}`); // shows in the Worker's logs
+}
+
 export default {
+  async scheduled(_event, env, ctx) { ctx.waitUntil(startMorningSearch(env)); },
   async fetch(req, env, _ctx, fetchFn = fetch) {
     const cors = corsHeaders(req.headers.get("origin"));
     const reply = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", ...cors } });

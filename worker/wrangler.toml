@@ -2,5 +2,8 @@ name = "flybye-times"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 
+[triggers]
+crons = ["17 12 * * *"]   # 07:17 Chicago in summer, 06:17 in winter: starts the morning search (daily.yml)
+
 [vars]
 PROJECT_ID = "flybye-6e46b"

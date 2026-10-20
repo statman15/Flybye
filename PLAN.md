@@ -76,6 +76,8 @@ Each one ends with something we both use.
 
 ## Open
 
+- **Morning trigger (2026-10-20).** GitHub's schedule never fired at 12:17 UTC and ran the 15:47 backup 5 hours late, so the Worker's Cloudflare cron (12:17 UTC) dispatches daily.yml with a fine-grained token (`GH_DISPATCH_TOKEN`: Actions read/write on statman15/Flybye only). GitHub's cron (14:47 UTC) stays as a fallback that skips spaces already run today.
+
 - **Sign-up by invite link (2026-10-19).** Admin makes reusable links (`invites/{code}`, 20 random chars) and can turn them off. Anyone signed in with Google who opens `#invite=CODE` can create one space of their own: id = their Firebase uid, they are the only member, it names the live invite (the rules enforce all of it), with default settings in the same batch. They bring their own calendars, SerpApi and Gemini keys. Keys stay readable only by a space's members.
 
 - **Usual price = Google's typical range (2026-10-19).** For wish cities, the usual price is the middle of Google's `typical_price_range` (built from its own fare history) for that city, trip type and departure month: one google_flights lookup, kept 30 days, at most `typical_per_run` (4) a day, nearest months first. Other cities, and wish cities until their lookup happens, use the median of our own stored prices.

@@ -1,7 +1,7 @@
 // node worker/test.mjs
 import assert from "node:assert/strict";
 import { webcrypto as crypto } from "node:crypto";
-import worker, { verifyToken, parseWindow, corsHeaders, resetJwksCache } from "./worker.js";
+import worker, { verifyToken, parseWindow, corsHeaders, resetJwksCache, startMorningSearch } from "./worker.js";
 
 const P = "flybye-6e46b", NOW = 1_800_000_000;
 const enc = (o) => Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64url");
@@ -119,5 +119,16 @@ assert.equal((await call(req({}, "https://evil.example", await live()), mk())).s
 r = await call(new Request("https://w.dev/times", { method: "OPTIONS", headers: { origin: "capacitor://localhost" } }), mk());
 assert.equal(r.status, 204);
 assert.equal(r.headers.get("access-control-allow-origin"), "capacitor://localhost");
+
+// Morning cron: dispatches daily.yml on main with the token; no token, no call
+let sent;
+await startMorningSearch({ GH_DISPATCH_TOKEN: "t" }, async (url, init) => { sent = { url, init }; return new Response(null, { status: 204 }); });
+assert.match(sent.url, /\/repos\/statman15\/Flybye\/actions\/workflows\/daily\.yml\/dispatches$/);
+assert.equal(sent.init.headers.authorization, "Bearer t");
+assert.deepEqual(JSON.parse(sent.init.body), { ref: "main" });
+sent = null;
+await startMorningSearch({}, async () => { sent = 1; });
+assert.equal(sent, null);
+await assert.rejects(startMorningSearch({ GH_DISPATCH_TOKEN: "t" }, async () => new Response("no", { status: 403 })), /403/);
 
 console.log("worker tests passed");
