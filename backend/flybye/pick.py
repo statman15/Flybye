@@ -111,7 +111,7 @@ def fmt_row(row, base, cfg):
     vs = f" ({round((base - row['price']) / base * 100)}% under usual)" if base and row["price"] < base else ""
     stops = "nonstop" if not row["stops"] else f"{row['stops']} stop"
     hotel = f" · hotel ~${round(row['hotel'])}" if row.get("hotel") else ""
-    return (f"{name} · {_d(row['out'])}–{_d(row['ret'])} · ${round(row['price'])} for {cfg['search']['adults']}{vs}"
+    return (f"{name} · {_d(row['out'])}–{_d(row['ret'])} · ${round(row['price'])} per person{vs}"
             f" · {row['minutes'] // 60}h{row['minutes'] % 60:02d} {stops}{hotel}")
 
 

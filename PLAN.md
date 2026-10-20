@@ -76,4 +76,6 @@ Each one ends with something we both use.
 
 ## Open
 
+- **Prices are per person (found 2026-10-19).** Explore's `flight_price` is per person even with `adults=2` (JAL ORD–NRT Dec 4–14: Explore $1,101, google_flights $2,109 for 2, the Google Flights link $1,055 for 1). The app shows every price per person; google_flights totals are divided by `adults`. Porto's few stored prices from before are totals for 2.
+
 - `hotel_price` units (per night or per stay).
