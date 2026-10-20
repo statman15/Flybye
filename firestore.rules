@@ -15,11 +15,25 @@ service cloud.firestore {
       allow get: if signed() && mail() == email;
     }
 
+    // Invite links: an admin makes and removes them; anyone signed in may look one up by its code (not list them).
+    match /invites/{code} {
+      allow get: if signed();
+      allow list, create, delete: if isAdmin();
+    }
+
     // Listing needs the caller in members (the app queries members array-contains). Admins also list, create and remove spaces.
     // The owner may change members and name only, and cannot drop themself.
     match /spaces/{sid} {
       allow get, list: if signed() && (mail() in resource.data.members || isAdmin());
-      allow create: if isAdmin() && request.resource.data.owner in request.resource.data.members;
+      // Admins create spaces for anyone. Anyone else may create exactly one, their own: its id is their uid, they are its
+      // only member, and it names a live invite link.
+      allow create: if (isAdmin() && request.resource.data.owner in request.resource.data.members)
+        || (signed() && sid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['name', 'owner', 'members', 'invite'])
+          && request.resource.data.owner == mail() && request.resource.data.members == [mail()]
+          && request.resource.data.name is string && request.resource.data.name.size() <= 60
+          && request.resource.data.invite is string
+          && exists(/databases/$(database)/documents/invites/$(request.resource.data.invite)));
       allow update: if signed() && mail() == resource.data.owner
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'name'])
         && resource.data.owner in request.resource.data.members;
@@ -40,6 +54,10 @@ service cloud.firestore {
         allow create: if isAdmin() && id == 'main'
           && !exists(/databases/$(database)/documents/spaces/$(sid))
           && existsAfter(/databases/$(database)/documents/spaces/$(sid));
+        // ...and so does someone creating their own space from an invite link.
+        allow create: if signed() && id == 'main' && sid == request.auth.uid
+          && !exists(/databases/$(database)/documents/spaces/$(sid))
+          && getAfter(/databases/$(database)/documents/spaces/$(sid)).data.owner == mail();
       }
 
       match /suggestions/{id} { allow read: if member(sid); }

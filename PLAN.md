@@ -76,6 +76,8 @@ Each one ends with something we both use.
 
 ## Open
 
+- **Sign-up by invite link (2026-10-19).** Admin makes reusable links (`invites/{code}`, 20 random chars) and can turn them off. Anyone signed in with Google who opens `#invite=CODE` can create one space of their own: id = their Firebase uid, they are the only member, it names the live invite (the rules enforce all of it), with default settings in the same batch. They bring their own calendars, SerpApi and Gemini keys. Keys stay readable only by a space's members.
+
 - **Usual price = Google's typical range (2026-10-19).** For wish cities, the usual price is the middle of Google's `typical_price_range` (built from its own fare history) for that city, trip type and departure month: one google_flights lookup, kept 30 days, at most `typical_per_run` (4) a day, nearest months first. Other cities, and wish cities until their lookup happens, use the median of our own stored prices.
 
 - **Flexible longer trips (2026-10-19).** Explore without dates (`travel_duration=2`) returns each city's cheapest ~1-week round trip over ~6 months, one date pair per city, any weekday (Asia: Tokyo Sun Dec 6 - Tue Dec 15, JAL $1,909 for 2). Searched once a week per area (3 searches), kept when the dates are 3-17 weeks out and free in every calendar, shown under Longer trips tagged "Flexible dates". Fixed Sat-Sat windows still run alongside.

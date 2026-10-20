@@ -75,10 +75,24 @@ const gateSignIn = err => showGate(`<div class="head"><h1>Flybye</h1></div>
   <div class="empty"><p>Cheap getaways on the days we’re both free.</p>
   <button class="pill" data-act="signin">Sign in with Google</button>
   <p class="err">${esc(err)}</p></div>`);
-const gateNoSpace = () => showGate(`<div class="head"><h1>Flybye</h1></div>
-  <div class="empty"><h2>No Flybye space for this account yet.</h2><p>Ask the person who invited you.</p><p>${esc(me)}</p>
-  ${isAdmin ? '<button class="pill" data-act="admin">Admin</button>' : ''}
-  <button class="pill quiet" data-act="signout">Sign out</button></div>`);
+const gateButtons = () => `${isAdmin ? '<button class="pill" data-act="admin">Admin</button>' : ''}<button class="pill quiet" data-act="signout">Sign out</button>`;
+async function gateNoSpace() {
+  const code = store.get('invite');
+  let ok = false;
+  if (code) try { ok = (await getDoc(doc(db, 'invites', code))).exists(); } catch (e) { return gateError(e.message); }
+  if (code && !ok) store.set('invite', '');
+  const name = (auth.currentUser.displayName || me.split('@')[0]) + '’s trips';
+  if (ok) return showGate(`<div class="head"><h1>Flybye</h1></div>
+    <div class="empty"><h2>You’re invited to Flybye.</h2><p>It finds cheap nonstop getaways on dates when your calendars are free.</p></div>
+    <form class="group form" id="inviteForm" novalidate>
+      <label>Name your space<input name="name" maxlength="60" autocomplete="off" value="${esc(name)}"></label>
+      <p class="err"></p><button class="pill" type="submit">Create my space</button></form>
+    <div class="pad">${gateButtons()}</div>`);
+  showGate(`<div class="head"><h1>Flybye</h1></div>
+    <div class="empty"><h2>No Flybye space for this account yet.</h2>
+    ${code ? '<p>This invite link has been turned off. Ask the person who sent it for a new one.</p>' : '<p>Ask the person who invited you.</p><p>Got an invite link? Open it on this phone.</p>'}
+    <p>${esc(me)}</p>${gateButtons()}</div>`);
+}
 const gateError = msg => showGate(`<div class="head"><h1>Flybye</h1></div>
   <div class="empty"><h2>Couldn’t load your spaces</h2><p class="err">${esc(msg)}</p>
   <button class="pill" data-act="boot">Try again</button><button class="pill quiet" data-act="signout">Sign out</button></div>`);
@@ -160,6 +174,21 @@ const acts = {
       await deleteDoc(doc(db, 'spaces', el.dataset.sid, 'private', 'keys')); // keys first: the rules refuse the space delete while they exist
       await deleteDoc(doc(db, 'spaces', el.dataset.sid));
     });
+  },
+  'inv-new': () => act(async () => {
+    const code = [...crypto.getRandomValues(new Uint8Array(20))].map(n => 'abcdefghijklmnopqrstuvwxyz0123456789'[n % 36]).join('');
+    await setDoc(doc(db, 'invites', code), { by: me, at: new Date().toISOString() });
+  }),
+  'inv-off': el => arm(el, 'inv:' + el.dataset.code) && act(() => deleteDoc(doc(db, 'invites', el.dataset.code))),
+  'inv-share': async el => {
+    const url = INVITE_URL + el.dataset.code;
+    try {
+      if (navigator.share) await navigator.share({ url });
+      else { await navigator.clipboard.writeText(url); toast('Link copied'); }
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      el.parentElement.insertAdjacentHTML('afterend', `<input class="pad" readonly value="${esc(url)}" onfocus="this.select()">`);
+    }
   },
   rank: el => { const p = el.nextElementSibling; p.hidden = !p.hidden; el.setAttribute('aria-expanded', !p.hidden); },
 };
@@ -245,6 +274,16 @@ const forms = {
     await writeKeys(() => patch);
     toast('Saved');
     await refresh();
+  },
+  inviteForm: async f => {
+    const name = f.name.value.trim(), uid = auth.currentUser.uid, b = writeBatch(db);
+    if (!name) throw new Error('Give your space a name.');
+    if (name.length > 60) throw new Error('Keep the name under 60 letters.');
+    b.set(doc(db, 'spaces', uid), { name, owner: me, members: [me], invite: store.get('invite') });
+    b.set(doc(db, 'spaces', uid, 'settings', 'main'), structuredClone(DEFAULT_SETTINGS));
+    await b.commit();
+    store.set('invite', '');
+    await boot();
   },
   adminForm: async f => {
     const name = f.name.value.trim(), owner = f.owner.value.trim().toLowerCase();
@@ -361,6 +400,11 @@ $('#trips').addEventListener('click', ev => {
 
 // #trip=<window_id>|<code>&space=<sid> (from a push) opens that space and scrolls to the card.
 const hashParams = () => new URLSearchParams(location.hash.slice(1));
+// An invite link (#invite=CODE) is remembered so it survives signing in.
+const INVITE_URL = 'https://statman15.github.io/Flybye/#invite=';
+function captureInvite() { const c = hashParams().get('invite'); if (/^[a-z0-9]{20}$/.test(c || '')) store.set('invite', c); }
+captureInvite();
+addEventListener('hashchange', () => { captureInvite(); if (auth.currentUser && !spaces.length && !$('#gate').hidden) gateNoSpace(); });
 function highlight() {
   const want = hashParams().get('trip');
   if (!want) return;
@@ -552,8 +596,15 @@ async function renderSettings() {
 async function renderAdmin() {
   const el = $('#admin');
   const all = (await getDocs(collection(db, 'spaces'))).docs.map(d => ({ sid: d.id, ...d.data() }));
+  const invites = (await getDocs(collection(db, 'invites'))).docs.map(d => ({ code: d.id, ...d.data() })).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   armed = '';
-  el.innerHTML = `<div class="head"><button class="back" data-act="boot">‹ Back</button><h1>Admin</h1><p class="sub">Spaces</p></div>
+  el.innerHTML = `<div class="head"><button class="back" data-act="boot">‹ Back</button><h1>Admin</h1><p class="sub">Invites and spaces</p></div>
+    <h2 class="sec">Invite links</h2>
+    ${invites.map(i => `<div class="group card card-top"><span class="muted">Made ${esc(stamp(i.at))}</span><span>
+      <button class="tag" data-act="inv-share" data-code="${esc(i.code)}">Share</button> <button class="tag" data-act="inv-off" data-code="${esc(i.code)}">Turn off</button></span></div>`).join('')}
+    <p class="pad muted">Anyone with a link can create their own space with their own calendars and keys. Turning a link off doesn’t remove spaces made with it.</p>
+    <div class="pad"><button class="pill small" data-act="inv-new">New invite link</button></div>
+    <h2 class="sec">Spaces</h2>
     ${all.map(s => `<div class="group card card-top"><span><span class="city">${esc(s.name)}</span><br><span class="muted">${esc(s.owner)} · ${esc((s.members || []).length)} member${(s.members || []).length === 1 ? '' : 's'}</span></span>
       <button class="tag" data-act="admin-del" data-sid="${esc(s.sid)}">Remove</button></div>`).join('') || '<div class="empty"><p>No spaces yet.</p></div>'}
     <h2 class="sec">New space</h2>
@@ -657,6 +708,7 @@ async function boot() {
   isAdmin = await getDoc(doc(db, 'admins', me)).then(d => d.exists(), () => false);
   try { spaces = (await getDocs(query(collection(db, 'spaces'), where('members', 'array-contains', me)))).docs.map(d => ({ ...d.data(), sid: d.id })); } catch (e) { return gateError(e.message); }
   const wanted = [hashParams().get('space'), store.get('space')];
+  if (spaces.length) store.set('invite', '');
   const pick = spaces.find(s => wanted.includes(s.sid));
   if (spaces.length === 1) await startSpace(spaces[0].sid);
   else if (pick) await startSpace(pick.sid);

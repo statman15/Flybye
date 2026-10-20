@@ -31,7 +31,7 @@ const stubs = {
   'firebase-app.js': `export const initializeApp = () => ({});`,
   'firebase-auth.js': `
     const F = () => window.__fake, subs = [];
-    export const getAuth = () => ({ get currentUser() { const u = F().user; return u && { ...u, getIdToken: async () => 'fake-id-token' }; } });
+    export const getAuth = () => ({ get currentUser() { const u = F().user; return u && { uid: 'uid-test', ...u, getIdToken: async () => 'fake-id-token' }; } });
     export const onAuthStateChanged = (a, cb) => { subs.push(cb); setTimeout(() => cb(F().user), 0); return () => {}; };
     export const signInWithPopup = async () => { F().user = { email: F().popupEmail }; subs.forEach(cb => cb(F().user)); };
     export const signInWithCredential = signInWithPopup;
@@ -70,6 +70,7 @@ const seed = () => ({
   'spaces/s1/meta/activity': { last_run: '2026-10-18T10:00:00Z', next_run: '2026-10-19T10:00:00Z', month: '2026-10', used: 30, cap: 100,
     windows: [{ id: 'w1', searched_at: '2026-10-18T10:01:00Z', picks: 3 }, { id: 'w2 <b>', searched_at: null, picks: 0 }], labelled: 12, blocking: 4, errors: ['Calendar <img src=x onerror=alert(1)> failed'] },
   'spaces/s2': { name: 'Brother', owner: 'multi@example.test', members: ['multi@example.test'] },
+  'invites/abcdefghijklmnopqrst': { by: 'admin@example.test', at: '2026-10-18T00:00:00Z' },
   'spaces/s3': { name: 'Fresh', owner: 'fresh@example.test', members: ['fresh@example.test'] },
   'spaces/s3/settings/main': { home: 'MDW', trips: {}, cities: [] },
 });
@@ -553,6 +554,45 @@ try {
     await page.waitForFunction(() => !document.querySelector('#admin').textContent.includes('bro@example.test'));
     await click(page, '#admin .back');
     await text(page, '#gate', 'No Flybye space for this account yet');
+  });
+
+  await run('admin: invite links', async () => {
+    page = await open({ email: 'admin@example.test' });
+    await click(page, '#gate [data-act=admin]');
+    await text(page, '#admin', 'Invite links');
+    await click(page, '#admin [data-act=inv-new]');
+    const mine = () => page.evaluate(() => Object.keys(window.__fake.docs).filter(k => /^invites\/[a-z0-9]{20}$/.test(k) && !k.endsWith('abcdefghijklmnopqrst')));
+    await page.waitForFunction(() => Object.keys(window.__fake.docs).some(k => k.startsWith('invites/') && !k.endsWith('abcdefghijklmnopqrst')));
+    const code = (await mine())[0].slice(8);
+    await page.waitForSelector(`#admin [data-act=inv-off][data-code="${code}"]`);
+    const off = `#admin [data-act=inv-off][data-code="${code}"]`;
+    await click(page, off);
+    await text(page, '#admin', 'Tap again to remove');
+    if (!(await doc(page, 'invites/' + code))) throw new Error('invite removed on the first tap');
+    await click(page, off);
+    await page.waitForFunction(c => !window.__fake.docs['invites/' + c], {}, code);
+  });
+
+  await run('invite link: create my own space', async () => {
+    page = await open({ email: 'newbie@example.test', displayName: 'Nova' }, '#invite=abcdefghijklmnopqrst');
+    await text(page, '#gate', 'You’re invited to Flybye');
+    if ((await page.$eval('#inviteForm [name=name]', el => el.value)) !== 'Nova’s trips') throw new Error('name not prefilled');
+    await set(page, '#inviteForm [name=name]', '');
+    await click(page, '#inviteForm button');
+    await text(page, '#inviteForm .err', 'name');
+    await set(page, '#inviteForm [name=name]', 'Nova <b>');
+    await click(page, '#inviteForm button');
+    await text(page, '#setup', 'Set up Nova');
+    const sp = await doc(page, 'spaces/uid-test');
+    if (JSON.stringify(sp) !== JSON.stringify({ name: 'Nova <b>', owner: 'newbie@example.test', members: ['newbie@example.test'], invite: 'abcdefghijklmnopqrst' })) throw new Error('space: ' + JSON.stringify(sp));
+    if (!(await doc(page, 'spaces/uid-test/settings/main'))?.home) throw new Error('settings missing');
+    if (await page.evaluate(() => localStorage.getItem('invite'))) throw new Error('invite not cleared');
+  });
+
+  await run('invite link: turned off', async () => {
+    page = await open({ email: 'newbie@example.test' }, '#invite=zzzzzzzzzzzzzzzzzzzz');
+    await text(page, '#gate', 'has been turned off');
+    if (await page.$('#inviteForm')) throw new Error('form shown for a dead invite');
   });
 } catch (e) {
   errors.push(`step "${step}" failed: ${e.message}`);
