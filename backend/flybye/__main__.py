@@ -196,9 +196,9 @@ def windows_report(windows, labels, cfg, ci):
 
 
 def next_run(now):
-    """When the main cron (12:17 UTC every day, daily.yml) fires next."""
-    n = now.astimezone(timezone.utc)
-    t = n.replace(hour=12, minute=17, second=0, microsecond=0)
+    """When the Worker's cron starts the next morning search: 06:50 Chicago every day."""
+    n = now.astimezone(TZ)
+    t = n.replace(hour=6, minute=50, second=0, microsecond=0)
     return (t if t > n else t + timedelta(days=1)).isoformat(timespec="seconds")
 
 

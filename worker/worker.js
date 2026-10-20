@@ -148,8 +148,12 @@ export async function startMorningSearch(env, fetchFn = fetch) {
   if (r.status !== 204) throw new Error(`GitHub dispatch failed: ${r.status}`); // shows in the Worker's logs
 }
 
+// Cron is UTC only, so it fires at 11:50 and 12:50 UTC and only the one that is 6:50 in Chicago (summer or winter) counts:
+// the search is done by about 7.
+export const isMorning = (ms) => Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(ms)) === 6;
+
 export default {
-  async scheduled(_event, env, ctx) { ctx.waitUntil(startMorningSearch(env)); },
+  async scheduled(event, env, ctx) { if (isMorning(event.scheduledTime)) ctx.waitUntil(startMorningSearch(env)); },
   async fetch(req, env, _ctx, fetchFn = fetch) {
     const cors = corsHeaders(req.headers.get("origin"));
     const reply = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", ...cors } });

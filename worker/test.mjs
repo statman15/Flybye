@@ -1,7 +1,7 @@
 // node worker/test.mjs
 import assert from "node:assert/strict";
 import { webcrypto as crypto } from "node:crypto";
-import worker, { verifyToken, parseWindow, corsHeaders, resetJwksCache, startMorningSearch } from "./worker.js";
+import worker, { verifyToken, parseWindow, corsHeaders, resetJwksCache, startMorningSearch, isMorning } from "./worker.js";
 
 const P = "flybye-6e46b", NOW = 1_800_000_000;
 const enc = (o) => Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64url");
@@ -119,6 +119,10 @@ assert.equal((await call(req({}, "https://evil.example", await live()), mk())).s
 r = await call(new Request("https://w.dev/times", { method: "OPTIONS", headers: { origin: "capacitor://localhost" } }), mk());
 assert.equal(r.status, 204);
 assert.equal(r.headers.get("access-control-allow-origin"), "capacitor://localhost");
+
+// 6:50 Chicago: 11:50 UTC in summer (CDT), 12:50 UTC in winter (CST)
+assert.ok(isMorning(Date.UTC(2026, 9, 21, 11, 50)) && !isMorning(Date.UTC(2026, 9, 21, 12, 50)));
+assert.ok(isMorning(Date.UTC(2026, 10, 2, 12, 50)) && !isMorning(Date.UTC(2026, 10, 2, 11, 50)));
 
 // Morning cron: dispatches daily.yml on main with the token; no token, no call
 let sent;

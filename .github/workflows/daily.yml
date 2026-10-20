@@ -3,7 +3,7 @@ name: Daily sweep
 # Every morning: test, then for each space: its calendars -> free windows -> its SerpApi searches -> Firestore + push.
 on:
   schedule:
-    # The Worker's Cloudflare cron starts this at 12:17 UTC (07:17 Chicago in summer). GitHub's own schedule fires hours
+    # The Worker's Cloudflare cron starts this at 06:50 Chicago. GitHub's own schedule fires hours
     # late or not at all, so it is only the fallback: spaces that already ran today are skipped.
     - cron: "47 14 * * *"
   workflow_dispatch:
