@@ -136,7 +136,7 @@ try {
     if (!html.includes('2h 45m')) throw new Error('flight time missing');
     if (!html.includes('40% under usual')) throw new Error('% under usual missing');
     if (html.includes('javascript:')) throw new Error('unsafe link rendered');
-    if (!html.includes('Forecast 78°/64° · 20% rain')) throw new Error('forecast line missing');
+    if (!html.includes('78° high')) throw new Error('weather missing from the compact rows');
     if (!html.includes('Typically 45°/18° · 30% rain')) throw new Error('typical line missing');
     if (!html.includes('United')) throw new Error('airline missing');
     if (!(await page.$eval('#trips .rank', el => el.hidden))) throw new Error('rank panel should start closed');

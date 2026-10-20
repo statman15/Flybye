@@ -71,6 +71,7 @@
   details.kind > summary small { font-size: 14px; font-weight: 400; color: var(--label2); }
   details.kind[open] { padding-bottom: 4px; }
   details.kind .group { margin-left: 8px; margin-right: 8px; }
+  details.kind .sec { margin: 14px 16px 6px; font-size: 17px; }
   details.more > summary { margin: 0 16px 12px; color: var(--look); font-weight: 600; cursor: pointer; }
   details.more > summary small { display: block; margin-left: 18px; font-size: 13px; font-weight: 400; color: var(--label2); }
   .card.look { box-shadow: inset 4px 0 0 var(--look), inset 0 0 0 .5px var(--sep); } /* not on the wish list: an idea, not a target */
@@ -116,6 +117,12 @@
   .rows button:active { opacity: .6; }
   .rows .t { font-weight: 600; overflow-wrap: anywhere; }
   .rows .why { grid-column: 1 / -1; font-size: 14px; color: var(--label2); overflow-wrap: anywhere; }
+  .rows.group { padding: 0 14px; }
+  .rows.group li:last-child { box-shadow: none; }
+  .rows .city, .rows .price { font-size: 17px; }
+  .rows .why .deal { font-weight: 600; }
+  .rows button.look .city { color: var(--look); }
+  .rows button.hit { box-shadow: inset 3px 0 0 var(--tint); padding-left: 8px; }
   .chip { align-self: start; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
   .chip.blocks { color: var(--on-tint); background: var(--tint); box-shadow: none; }
 

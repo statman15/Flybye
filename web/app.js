@@ -275,6 +275,13 @@ function rankHtml(sc) {
     .filter(([, v]) => Number.isFinite(v) && v !== 0);
   return `<div class="rank" hidden>${rows.map(([l, v]) => `<p><span>${esc(l)}</span><b>${esc(pts(v))}</b></p>`).join('')}<p class="total"><span>Score</span><b>${esc(Math.round(sc.total * 10) / 10)}</b></p></div>`;
 }
+// Inside the sections: one line per city. The full card (and Why this rank) is a tap away on the trip screen.
+function pickRow(p, w) {
+  const pct = p.usual > 0 ? Math.round((1 - p.price / p.usual) * 100) : 0;
+  const bits = [dur(p.minutes), p.stops ? stopsText(p.stops) : '', Number.isFinite(p.weather?.hi_f) ? deg(p.weather.hi_f) + ' high' : '', p.flex ? 'Flexible dates' : ''];
+  return `<li><button data-trip="${esc(w.id)}|${esc(p.code)}"${p.wish ? '' : ' class="look"'}><span class="t city">${esc(p.name)}</span><span class="price">${esc(money(p.price))}</span>
+    <span class="why">${pct > 0 ? `<b class="deal">${pct}% under usual</b> · ` : ''}${bits.filter(Boolean).map(esc).join(' · ')}</span></button></li>`;
+}
 function pickCard(p, w) {
   const pct = p.usual > 0 ? Math.round((1 - p.price / p.usual) * 100) : 0, wx = wxLine(p.weather);
   return `<article class="group card${p.wish ? '' : ' look'}" data-trip="${esc(w.id)}|${esc(p.code)}">
@@ -310,8 +317,8 @@ async function renderTrips() {
     const html = wins.map(({ w, picks }) => {
       const mine = picks.filter(p => p.wish), others = picks.filter(p => !p.wish);
       return `<h2 class="sec">${esc(day(w.out))} → ${esc(day(w.ret))}${w.holiday ? `<small>${esc(w.holiday)}</small>` : ''}</h2>
-        ${mine.map(p => pickCard(p, w)).join('') || '<p class="pad muted">No wish-list city flies nonstop on these dates.</p>'}
-        ${others.length ? `<details class="more"><summary>Worth a look (${others.length})<small>Not on your wish list, but good options for these dates</small></summary>${others.map(p => pickCard(p, w)).join('')}</details>` : ''}`;
+        ${mine.length ? `<ul class="rows group">${mine.map(p => pickRow(p, w)).join('')}</ul>` : '<p class="pad muted">No wish-list city flies nonstop on these dates.</p>'}
+        ${others.length ? `<details class="more"><summary>Worth a look (${others.length})<small>Not on your wish list, but good options for these dates</small></summary><ul class="rows group">${others.map(p => pickRow(p, w)).join('')}</ul></details>` : ''}`;
     }).join('');
     return `<details class="kind" data-sec="${i}"${openSecs.has(i) ? ' open' : ''}><summary>${esc(title)} <small>${wins.length} date${wins.length > 1 ? 's' : ''}</small></summary>${html}</details>`;
   }).join('');
@@ -381,7 +388,8 @@ async function renderTrip() {
   el.innerHTML = `<div class="head"><button class="back" data-go="trips">‹ Trips</button><h1>${esc(p.name)}</h1>
     <p class="sub">${esc(day(w.out))} → ${esc(day(w.ret))}${w.holiday ? ' · ' + esc(w.holiday) : ''}</p></div>
     <div class="pad"><p class="meta">${[money(p.price) + ' per person', dur(p.minutes), stopsText(p.stops), p.airline].filter(Boolean).map(esc).join(' · ')}</p>
-    ${wxLine(p.weather) ? `<p class="meta wx">${esc(wxLine(p.weather))}</p>` : ''}</div>
+    ${wxLine(p.weather) ? `<p class="meta wx">${esc(wxLine(p.weather))}</p>` : ''}
+    ${p.score ? '<div class="row"><button class="pill small quiet" data-act="rank" aria-expanded="false">Why this rank</button>' + rankHtml(p.score) + '</div>' : ''}</div>
     <div id="times"><p class="pad muted"><span class="spin" aria-hidden="true"></span> Looking up flight times…</p></div>`;
   let html;
   try {
