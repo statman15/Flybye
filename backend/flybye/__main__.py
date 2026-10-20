@@ -8,7 +8,7 @@ import yaml
 
 from . import ai, cal, pick, push, serp, weather
 from . import store as storem
-from .windows import TZ, candidates, is_free
+from .windows import TZ, candidates, is_free, parse
 
 
 def app_link(sid, window_id=None, code=None):
@@ -26,16 +26,27 @@ def load_cfg(st):
 
 
 def free_windows(cfg, st, today, fetch, chat):
-    """(windows free in every one of the space's calendars, {event key: blocks})."""
+    """(windows free in every one of the space's calendars, {event key: blocks}, fits) where fits(window) says whether
+    a longer trip on other dates (Google's flexible picks) is in range and free too."""
     calendars = st.keys().get("calendars", [])
     if not calendars:  # nothing to check against: don't call every date free
-        return [], {}
+        return [], {}, lambda w: False
     now = datetime.combine(today, datetime.min.time(), TZ)
     last_week = max(c["weeks"][1] for c in cfg["trips"].values())
     events = [e for c in calendars for e in cal.parse(fetch(c["url"]), now - timedelta(days=1), now + timedelta(weeks=last_week + 2))]
     labels = ai.label_events(events, st, cfg, chat)
     blockers = [e for e in events if labels[f"{e.uid}|{e.title}"]]
-    return [w for w in candidates(today, cfg["trips"]) if is_free(w, blockers)], labels
+    long = cfg["trips"].get("long") or {}
+    lo, hi = (today + timedelta(weeks=n) for n in long.get("weeks", [0, 0]))
+    fits = lambda w: bool(long.get("enabled")) and lo <= w.out <= hi and is_free(w, blockers)
+    return [w for w in candidates(today, cfg["trips"]) if is_free(w, blockers)], labels, fits
+
+
+def with_flex(windows, st, fits):
+    """Plus the longer trips Google's flexible search found earlier (stored under latest/) that still fit."""
+    ids = {w.id for w in windows}
+    found = [parse(i) for i in st.latest_ids() if i.startswith("long:") and i not in ids]
+    return windows + [w for w in found if fits(w)]
 
 
 def month(today):
@@ -47,13 +58,19 @@ def baselines(st, codes_kinds, before):
             for code, kind in codes_kinds}
 
 
-def sweep(cfg, st, today, windows, get, send, errors):
+def sweep(cfg, st, today, windows, get, send, errors, fits=lambda w: False):
     b = st.budget(month(today))
     budget = pick.allowance(cfg["search"]["cap"], b["used"], today)
     rows = []
     calls = []
     # a window is re-searched once a week at most
     stale = (today - timedelta(days=cfg["search"].get("refresh_days", 7) - 1)).isoformat()
+    # first, Google's flexible longer trips: 1 search per area finds each city's cheapest week, whatever the weekday
+    flex = [a for a in cfg["search"]["long_areas"] if b["last"].get(serp.flex_key(a), "") < stale]
+    if (cfg["trips"].get("long") or {}).get("enabled") and flex and len(flex) <= budget:
+        # ponytail: a flexible pick on exactly a fixed window's dates shares its latest/ doc, so whichever search ran last wins until the next one
+        calls += [lambda a=a: [r for r in serp.explore_flex(a, cfg, st, get) if fits(parse(r["window_id"]))] for a in flex]
+        budget -= len(flex)
     for w in pick.choose(windows, b["last"], budget, cfg, stale):
         calls += [lambda w=w, a=a: serp.explore(w, a, cfg, st, get)
                   for a in (cfg["search"]["long_areas"] if w.kind == "long" else [None])]
@@ -162,6 +179,7 @@ def write_activity(cfg, st, today, windows, labels, doc, errors):
 def daily(cfg, st, today, fetch=cal.fetch, chat=ai.http_chat, get=serp.http_get, send=None, wget=weather.http_get):
     """One space's morning: its calendars -> free windows -> its SerpApi searches -> suggestions, alerts, activity."""
     keys, errors, windows, labels, doc = st.keys(), [], [], {}, None
+    fixed = windows
     send = send or (lambda *a: push.send(st, *a))
     ask = lambda p, m: chat(p, m, keys.get("gemini"))
     search = lambda p: get(p, keys.get("serpapi"))
@@ -171,9 +189,10 @@ def daily(cfg, st, today, fetch=cal.fetch, chat=ai.http_chat, get=serp.http_get,
         else:
             if not keys.get("gemini"):
                 errors.append("Add a Gemini key in Settings")
-            windows, labels = free_windows(cfg, st, today, fetch, ask)
+            windows, labels, fits = free_windows(cfg, st, today, fetch, ask)
+            fixed = windows
             if keys.get("serpapi"):
-                rows = sweep(cfg, st, today, windows, search, send, errors)
+                rows = sweep(cfg, st, today, windows, search, send, errors, fits)
                 try:
                     instant_alerts(cfg, st, today, rows, search, send)
                 except Exception as e:  # never let an alert problem cost us the Sunday summary
@@ -181,6 +200,7 @@ def daily(cfg, st, today, fetch=cal.fetch, chat=ai.http_chat, get=serp.http_get,
                     errors.append("Deal alerts failed")
             else:
                 errors.append("Add a SerpApi key in Settings")
+            windows = with_flex(windows, st, fits)
             wx = weather.Weather(st, today, wget)
             doc = publish(cfg, st, today, windows, wx)
             if today.weekday() == 6:
@@ -188,7 +208,7 @@ def daily(cfg, st, today, fetch=cal.fetch, chat=ai.http_chat, get=serp.http_get,
     except Exception as e:  # only the kind of error is kept: messages can carry calendar links
         print(f"space {st.sid}: run failed ({type(e).__name__})", file=sys.stderr)
         errors.append(f"Run failed ({type(e).__name__})")
-    write_activity(cfg, st, today, windows, labels, doc, errors)
+    write_activity(cfg, st, today, fixed, labels, doc, errors)  # flexible trips have no window of their own to show
 
 
 def command(st, cmd, today, fetch=cal.fetch, chat=ai.http_chat, wget=weather.http_get, **kw):
@@ -199,12 +219,12 @@ def command(st, cmd, today, fetch=cal.fetch, chat=ai.http_chat, wget=weather.htt
             return  # the backup cron: this space already ran today
         daily(cfg, st, today, fetch=fetch, chat=chat, wget=wget, **kw)
     elif cmd == "windows":
-        ws, _ = free_windows(cfg, st, today, fetch, ask)
+        ws, *_ = free_windows(cfg, st, today, fetch, ask)
         report = windows_report(ws, list(reversed(st.labels_since(""))), cfg, bool(os.environ.get("GITHUB_ACTIONS")))
         print("\n".join(f"space {st.sid}: {line}" for line in report))
     elif cmd == "summary":
-        ws, _ = free_windows(cfg, st, today, fetch, ask)
-        summary(cfg, st, today, ws, lambda *a: push.send(st, *a), weather.Weather(st, today, wget))
+        ws, _, fits = free_windows(cfg, st, today, fetch, ask)
+        summary(cfg, st, today, with_flex(ws, st, fits), lambda *a: push.send(st, *a), weather.Weather(st, today, wget))
     elif cmd == "test-notify":
         push.send(st, "Flybye test", "If you see this, Flybye can reach your phone.", None, app_link(st.sid))
 

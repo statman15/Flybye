@@ -106,6 +106,10 @@ class Store:
         for w, rs in by_window.items():
             self._set("latest", w, {"seen": seen, "rows": rs})
 
+    def latest_ids(self):
+        # ponytail: lists every stored window (old ones too); prune latest/ if this gets slow
+        return [s.id for s in self._col("latest").stream()]
+
     def latest_rows(self, window_ids, since):
         out = []
         for w in window_ids:

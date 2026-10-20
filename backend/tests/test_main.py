@@ -51,6 +51,7 @@ class Fakes:
         self.explore = json.loads((FIX / "explore.json").read_text())
         self.flights = json.loads((FIX / "flights.json").read_text())
         self.flights["price_insights"]["lowest_price"] = lowest
+        self.flex = {"destinations": []}  # Explore without dates (Google's flexible longer trips)
 
     def fetch(self, url):
         self.fetched.append(url)
@@ -59,7 +60,9 @@ class Fakes:
     def get(self, p, key):
         self.params.append(p)
         self.serp_keys.append(key)
-        return self.explore if p["engine"] == "google_travel_explore" else self.flights
+        if p["engine"] == "google_travel_explore":
+            return self.explore if "outbound_date" in p else self.flex
+        return self.flights
 
     def wget(self, url):
         self.weather_urls.append(url)
@@ -85,7 +88,7 @@ def run(today, f, st, cfg=CFG):
 def test_daily_skips_blocked_window_stores_prices_and_spends_allowance():
     st, f = fresh(), Fakes()
     run(date(2026, 10, 17), f, st)  # Saturday: no summary
-    searched = {(p["outbound_date"], p["return_date"]) for p in f.params if p["engine"] == "google_travel_explore"}
+    searched = {(p["outbound_date"], p["return_date"]) for p in f.params if "outbound_date" in p}
     assert ("2026-11-13", "2026-11-15") not in searched          # the offsite blocks that weekend
     used = st.budget("2026-10")["used"]
     assert 0 < used <= main.pick.allowance(CFG["search"]["cap"], 0, date(2026, 10, 17)) + CFG["search"]["confirm_per_run"]
@@ -120,6 +123,27 @@ def test_backup_cron_skips_a_space_that_already_ran_today(monkeypatch):
     assert f.params == [] and f.sent == []
     main.command(st, "daily", date(2026, 10, 19), fetch=f.fetch, chat=f.chat, wget=f.wget, get=f.get, send=f.send)
     assert f.params  # the next day it runs
+
+
+def test_flexible_longer_trips_kept_when_free_searched_weekly_and_still_shown_next_day():
+    import copy
+    st, f = fresh(), Fakes()
+    d = f.explore["destinations"][0]
+    f.flex = {"destinations": [{**copy.deepcopy(d), "start_date": s, "end_date": e, "destination_airport": {"code": c}}
+                               for c, s, e in [("MIA", "2026-12-04", "2026-12-14"),   # Fri -> Mon, free: kept
+                                               ("DEN", "2026-11-14", "2026-11-21"),   # the offsite blocks Nov 13-16
+                                               ("LAX", "2026-10-20", "2026-10-27")]]}  # sooner than 3 weeks out
+    run(date(2026, 10, 17), f, st)
+    flex = [p for p in f.params if p["engine"] == "google_travel_explore" and "outbound_date" not in p]
+    assert len(flex) == 3 and all(p["travel_duration"] == 2 for p in flex)   # one per area
+    ids = {w["id"]: w for w in st.fs.data["spaces/s1/suggestions/current"]["windows"]}
+    assert "long:2026-11-14:2026-11-21" not in ids and "long:2026-10-20:2026-10-27" not in ids
+    mia = ids["long:2026-12-04:2026-12-14"]["picks"]
+    assert [p["code"] for p in mia] == ["MIA"] and mia[0]["flex"] is True
+    f.params.clear()
+    run(date(2026, 10, 18), f, st)
+    assert not [p for p in f.params if "outbound_date" not in p and p["engine"] == "google_travel_explore"]  # weekly
+    assert "long:2026-12-04:2026-12-14" in {w["id"] for w in st.fs.data["spaces/s1/suggestions/current"]["windows"]}
 
 
 def test_every_daily_run_writes_the_suggestions_doc():

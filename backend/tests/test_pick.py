@@ -166,7 +166,7 @@ def test_suggestions_doc_shape():
     assert [p["code"] for p in first["picks"]][:2] == ["DEN", "FLL"]      # best first: wish cities lead
     p = next(p for p in first["picks"] if p["code"] == "DEN")
     assert set(p) == {"code", "name", "price", "usual", "minutes", "stops", "hotel", "airline", "airline_code", "wish",
-                      "link", "weather", "score", "country"}
+                      "link", "weather", "score", "country", "flex"}
     assert p["weather"] is None and p["airline_code"] == "UA"
     assert set(p["score"]) == {"total", "under_pct", "hours", "wish", "holiday", "weather", "airline"}
     assert p["score"]["airline"] == 8 and p["score"]["wish"] == 10 and p["score"]["under_pct"] == 40.0

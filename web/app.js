@@ -283,7 +283,7 @@ function pickCard(p, w) {
     <p class="meta">${[dur(p.minutes), stopsText(p.stops), p.airline, p.hotel != null ? 'hotel ' + money(p.hotel) : ''].filter(Boolean).map(esc).join(' · ')}</p>
     ${wx ? `<p class="meta wx">${esc(wx)}</p>` : ''}
     ${pct > 0 ? `<p class="meta deal">${pct}% under usual (${esc(money(p.usual))})</p>` : ''}
-    <div class="tags">${p.wish ? '<span class="tag on">Wish list</span>' : '<span class="tag look">Worth a look</span>'}</div>
+    <div class="tags">${p.wish ? '<span class="tag on">Wish list</span>' : '<span class="tag look">Worth a look</span>'}${p.flex ? '<span class="tag" title="Google picked these dates as the cheapest week">Flexible dates</span>' : ''}</div>
     <div class="row"><a class="pill small" href="${esc(safeUrl(p.link))}" target="_blank" rel="noopener noreferrer">Google Flights</a>
     ${p.score ? '<button class="pill small quiet" data-act="rank" aria-expanded="false">Why this rank</button>' + rankHtml(p.score) : ''}</div>
   </article>`;

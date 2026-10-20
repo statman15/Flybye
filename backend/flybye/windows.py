@@ -37,6 +37,17 @@ def holidays(year):
             date(year, 12, 25): "Christmas"}
 
 
+def window(kind, out, ret, hol=None):
+    """A Window, named after the first US holiday inside it (if any)."""
+    hol = hol or {**holidays(out.year), **holidays(out.year + 1)}
+    return Window(kind, out, ret, next((hol[x] for x in sorted(hol) if out <= x <= ret), None))
+
+
+def parse(window_id):
+    kind, out, ret = window_id.split(":")
+    return window(kind, date.fromisoformat(out), date.fromisoformat(ret))
+
+
 # kind -> list of (departure weekday, nights)
 SHAPES = {"weekend": [(4, 2)], "3day": [(3, 3), (4, 3)]}
 
@@ -53,9 +64,7 @@ def candidates(today, trips):
         while d <= last:
             for wd, nights in shapes:
                 if d.weekday() == wd:
-                    ret = d + timedelta(days=nights)
-                    name = next((hol[x] for x in sorted(hol) if d <= x <= ret), None)
-                    out.append(Window(kind, d, ret, name))
+                    out.append(window(kind, d, d + timedelta(days=nights), hol))
             d += timedelta(days=1)
     return sorted(out, key=lambda w: (w.out, w.kind))
 

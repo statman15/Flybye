@@ -27,7 +27,7 @@ def test_a_trip_needs_every_calendar_free():
     f.cals = {"https://cal.test/a": ICS, "https://cal.test/b": ICS_B}
     run(date(2026, 10, 17), f, st)
     assert f.fetched.count("https://cal.test/a") == 1 and f.fetched.count("https://cal.test/b") == 1
-    searched = {p["outbound_date"] for p in f.params if p["engine"] == "google_travel_explore"}
+    searched = {p["outbound_date"] for p in f.params if "outbound_date" in p}
     assert "2026-11-13" not in searched and "2026-11-20" not in searched      # one blocked by A, one by B
     assert "2026-11-06" in searched or "2026-11-27" in searched
     assert st.activity()["labelled"] == 2 and st.activity()["blocking"] == 2
@@ -67,7 +67,7 @@ def test_an_avoid_list_edited_later_hides_already_stored_rows():
     run(date(2026, 10, 17), f, st)
     assert any(p["code"] == "DEN" for w in st.fs.data["spaces/s1/suggestions/current"]["windows"] for p in w["picks"])
     cfg = {**CFG, "airlines": {"prefer": [], "avoid": ["F9"]}}
-    windows, _ = main.free_windows(cfg, st, date(2026, 10, 17), f.fetch, lambda p, m: f.chat(p, m, "k"))
+    windows, *_ = main.free_windows(cfg, st, date(2026, 10, 17), f.fetch, lambda p, m: f.chat(p, m, "k"))
     doc = main.publish(cfg, st, date(2026, 10, 17), windows, None)
     assert doc["windows"] and not any(p["code"] == "DEN" for w in doc["windows"] for p in w["picks"])
 

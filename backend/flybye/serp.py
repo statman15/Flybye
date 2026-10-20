@@ -4,7 +4,9 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import date, datetime
+
+from .windows import window
 
 
 class Fatal(Exception):
@@ -34,8 +36,8 @@ def _call(params, window_id, st, get):
 
 
 def _base(engine, w, cfg, **extra):
-    return {"engine": engine, "departure_id": cfg.get("home", "ORD"), "outbound_date": str(w.out),
-            "return_date": str(w.ret), "type": 1, "adults": cfg["search"]["adults"], "stops": cfg["search"]["stops"],
+    dates = {"outbound_date": str(w.out), "return_date": str(w.ret)} if w else {}
+    return {"engine": engine, "departure_id": cfg.get("home", "ORD"), **dates, "type": 1, "adults": cfg["search"]["adults"], "stops": cfg["search"]["stops"],
             "currency": "USD", "hl": "en", "gl": "us", **extra}
 
 
@@ -51,10 +53,28 @@ def explore(w, area, cfg, st, get):
     if area:
         p["arrival_area_id"] = area
     d = _call(p, w.id, st, get)
-    return [_row(w, x["destination_airport"]["code"], x["name"], x["flight_price"], x.get("hotel_price"),
-                 x.get("flight_duration", 0), x.get("airline"), x.get("number_of_stops", 0), "explore",
-                 x.get("airline_code"), x.get("gps_coordinates"), x.get("country"))
-            for x in d.get("destinations", []) if x.get("flight_price") and x.get("destination_airport")]
+    return [_explore_row(w, x, "explore") for x in d.get("destinations", []) if x.get("flight_price") and x.get("destination_airport")]
+
+
+def _explore_row(w, x, source):
+    return _row(w, x["destination_airport"]["code"], x["name"], x["flight_price"], x.get("hotel_price"),
+                x.get("flight_duration", 0), x.get("airline"), x.get("number_of_stops", 0), source,
+                x.get("airline_code"), x.get("gps_coordinates"), x.get("country"))
+
+
+def explore_flex(area, cfg, st, get):
+    """No dates: Google picks each city's cheapest ~1-week round trip over the next ~6 months (one date pair per city)."""
+    p = _base("google_travel_explore", None, cfg, travel_mode=1, travel_duration=2)
+    if area:
+        p["arrival_area_id"] = area
+    d = _call(p, flex_key(area), st, get)
+    return [_explore_row(window("long", date.fromisoformat(x["start_date"]), date.fromisoformat(x["end_date"])), x, "flex")
+            for x in d.get("destinations", [])
+            if x.get("flight_price") and x.get("destination_airport") and x.get("start_date") and x.get("end_date")]
+
+
+def flex_key(area):
+    return f"flex:{area or 'home'}"
 
 
 def _itins(d):

@@ -146,7 +146,7 @@ def _pick(r, baselines, windows, cfg):
             "usual": each(baselines.get((r["code"], r["kind"])), cfg), "minutes": r["minutes"], "stops": r["stops"],
             "hotel": r.get("hotel"), "airline": r.get("airline"), "airline_code": r.get("airline_code"), "wish": bool(city),
             "link": flights_link(r, cfg), "weather": r.get("weather"), "score": {k: round(v, 1) for k, v in why.items()},
-            "country": r.get("country")}
+            "country": r.get("country"), "flex": r.get("source") == "flex"}
 
 
 def suggestions(rows, baselines, windows, cfg, updated):
