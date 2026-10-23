@@ -131,6 +131,16 @@ class Store:
     def add_alert(self, a):
         self._set("meta", "alerts", {"sent": (self.alerts() + [a])[-100:]})
 
+    def watches(self):
+        """[(id, watch)] oldest first."""
+        return sorted(((s.id, s.to_dict()) for s in self._col("watches").stream()), key=lambda x: x[1]["at"])
+
+    def set_watch(self, id, fields):
+        self._set("watches", id, fields, merge=True)
+
+    def drop_watch(self, id):
+        self._col("watches").document(id).delete()
+
     def summary_last(self):
         return self._get("meta", "summary", {"last": ""})["last"]
 

@@ -91,8 +91,8 @@ def _itins(d):
     return d.get("best_flights", []) + d.get("other_flights", [])
 
 
-def flights(w, airports, stops, name, cfg, st, get):
-    d = _call({**_base("google_flights", w, cfg), "arrival_id": ",".join(airports), "stops": stops}, w.id, st, get)
+def flights(w, airports, stops, name, cfg, st, get, key=None):
+    d = _call({**_base("google_flights", w, cfg), "arrival_id": ",".join(airports), "stops": stops}, key or w.id, st, get)
     best = min(_itins(d), key=lambda x: x["price"], default=None)
     if not best:
         return None

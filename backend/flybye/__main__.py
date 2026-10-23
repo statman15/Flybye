@@ -53,6 +53,12 @@ def month(today):
     return f"{today:%Y-%m}"
 
 
+def typical_of(st, r, cfg):
+    """Google's stored typical range for a row's wish city, trip type and month, or None."""
+    city = pick.city_for(r["code"], cfg)
+    return st.typical(pick.typical_id(city, r["kind"], r["out"][:7])) if city else None
+
+
 def baselines(st, rows, before, cfg):
     """Usual price per pick.bkey: for wish cities, the middle of Google's typical range for that month (its fare
     history, looked up monthly); otherwise, or until that lookup happens, the median of the prices we've seen."""
@@ -62,8 +68,7 @@ def baselines(st, rows, before, cfg):
         k = pick.bkey(r)
         if k in out:
             continue
-        city = pick.city_for(r["code"], cfg)
-        t = st.typical(pick.typical_id(city, r["kind"], k[2])) if city else None
+        t = typical_of(st, r, cfg)
         if t and t.get("low"):
             out[k] = (t["low"] + t["high"]) / 2
         else:
@@ -136,6 +141,35 @@ def sweep(cfg, st, today, windows, get, send, errors, fits=lambda w: False):
     return rows
 
 
+def watches(cfg, st, today, get, send):
+    """Re-check each watched trip (3 oldest) and push when its price moved by 5% or $10."""
+    for id, w in st.watches()[:3]:
+        win = parse(w["window_id"])
+        if win.out < today:
+            st.drop_watch(id)
+            continue
+        if st.budget(month(today))["used"] >= cfg["search"]["cap"]:
+            return
+        city = pick.city_for(w["code"], cfg)
+        try:
+            row = serp.flights(win, city["airports"] if city else [w["code"]], city.get("stops", cfg["search"]["stops"]) if city else cfg["search"]["stops"],
+                               w["name"], cfg, st, get, "watch:" + id)  # own key: the window's weekly search still runs
+            if not row:
+                st.set_watch(id, {"checked": str(today)})
+                continue
+            p, prev = pick.each(row["price"], cfg), w.get("last", w["price"])
+            if abs(p - prev) >= max(10, 0.05 * prev):
+                body = (f"Down to ${p} per person (was ${prev})." if p < prev
+                        else f"Up to ${p} per person (was ${prev}). Prices are rising: book soon if you still want it.")
+                send("Flybye watch: " + w["name"], body, {"window_id": w["window_id"], "code": w["code"], "space": st.sid},
+                     app_link(st.sid, w["window_id"], w["code"]))
+            st.set_watch(id, {"last": p, "low": min(p, w.get("low", p)), "checked": str(today)})
+        except serp.Fatal:
+            raise
+        except Exception as e:  # one bad search shouldn't stop the other watches
+            print(f"watch failed for {w['code']} {w['window_id']}: {e}", file=sys.stderr)
+
+
 def instant_alerts(cfg, st, today, rows, get, send):
     base = baselines(st, rows, str(today), cfg)
     sent = st.alerts()
@@ -166,6 +200,7 @@ def latest(cfg, st, today, windows, wx):
     weather, and their usual prices."""
     ids = {w.id: w for w in windows}
     rows = pick.keep(st.latest_rows(list(ids), (today - timedelta(days=21)).isoformat()), cfg)
+    rows = [{**r, "typical": {"low": t["low"], "high": t["high"]}} if (t := typical_of(st, r, cfg)) and t.get("low") else r for r in rows]
     if wx:
         rows = [{**r, "weather": wx.of(r)} for r in rows]
     return rows, ids, baselines(st, rows, "9999", cfg)
@@ -229,6 +264,11 @@ def daily(cfg, st, today, fetch=cal.fetch, chat=ai.http_chat, get=serp.http_get,
             windows, labels, fits = free_windows(cfg, st, today, fetch, ask)
             fixed = windows
             if keys.get("serpapi"):
+                try:
+                    watches(cfg, st, today, search, send)
+                except Exception as e:  # incl. serp.Fatal: sweep will hit the same wall and say so
+                    print(f"watches failed: {e}", file=sys.stderr)
+                    errors.append("Price watch failed")
                 rows = sweep(cfg, st, today, windows, search, send, errors, fits)
                 try:
                     instant_alerts(cfg, st, today, rows, search, send)

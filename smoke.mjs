@@ -56,7 +56,7 @@ const stubs = {
 };
 
 const KEYS = { serpapi: 'sk-secret', gemini: 'gk-secret', calendars: [{ name: 'Chris <i>', url: 'https://calendar.google.com/calendar/ical/secret-token/basic.ics' }] };
-const pick = (extra = {}) => ({ code: 'DEN', name: 'Denver <b>', price: 240, usual: 400, minutes: 165, stops: 0, hotel: 130, airline: 'United', airline_code: 'UA', wish: true, link: 'https://www.google.com/travel/flights?q=x',
+const pick = (extra = {}) => ({ code: 'DEN', name: 'Denver <b>', price: 240, usual: 400, minutes: 165, stops: 0, hotel: 130, airline: 'United', airline_code: 'UA', wish: true, level: 'low', range: [200, 350], link: 'https://www.google.com/travel/flights?q=x',
   weather: { kind: 'forecast', hi_f: 78.4, lo_f: 64, rain_pct: 20 }, score: { total: 65.5, under_pct: 40, hours: -5.5, wish: 15, holiday: 0, weather: 8, airline: 8 }, ...extra });
 const seed = () => ({
   'admins/admin@example.test': {},
@@ -64,7 +64,7 @@ const seed = () => ({
   'spaces/s1/private/keys': structuredClone(KEYS),
   'spaces/s1/settings/main': { home: 'ORD', trips: { weekend: { enabled: true, weeks: [2, 10] }, '3day': { enabled: true, weeks: [2, 12] }, long: { enabled: true, weeks: [3, 17], nights: [7] } },
     cities: [{ name: 'Denver <b>', airports: ['DEN'], trips: ['weekend'] }], score: { hour_penalty: 2 }, airlines: { prefer: ['UA'], avoid: [] }, weather: { min_f: 65, max_f: 85 } },
-  'spaces/s1/suggestions/current': { updated: '2026-10-17T12:00:00', windows: [{ id: 'w1', kind: 'weekend', out: '2026-11-06', ret: '2026-11-08', holiday: null, picks: [pick()] }],
+  'spaces/s1/suggestions/current': { updated: '2026-10-17T12:00:00', windows: [{ id: 'w1', kind: 'weekend', out: '2026-11-06', ret: '2026-11-08', holiday: null, off: 1, picks: [pick()] }],
     top: [pick({ window_id: 'w1', link: 'javascript:alert(1)', weather: { kind: 'typical', hi_f: 45, lo_f: 18, rain_pct: 30 } })] },
   'spaces/s1/labels/a': { title: 'Dentist <img src=x onerror=alert(1)>', start: '2999-01-02', all_day: true, block: true, why: 'Appointment', override: null },
   'spaces/s1/meta/activity': { last_run: '2026-10-18T10:00:00Z', next_run: '2026-10-19T10:00:00Z', month: '2026-10', used: 30, cap: 100,
@@ -163,6 +163,32 @@ try {
     if (workerHits !== 1) throw new Error(`expected 1 Worker call (cached), got ${workerHits}`);
     const cached = await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('times:')));
     if (cached.length !== 1) throw new Error('times not cached');
+  });
+
+  await run('watch a trip, days off, book-now verdict', async () => {
+    await click(page, '#trip .back');
+    await text(page, '#trips', 'Top picks');
+    const html = await page.$eval('#trips', el => el.innerHTML);
+    if (!html.includes('Sun, Nov 8 · 3 days · 1 day off') || !html.includes('Low for these dates · good time to book (Google’s usual $200–$350)') || !html.includes('Good time to book')) throw new Error('days off or verdict missing');
+    await click(page, '#trips [data-trip] .city');
+    await click(page, '#trip [data-act=watch]');
+    await page.waitForFunction(() => window.__fake.docs['spaces/s1/watches/w1|DEN']?.by === 'test@example.test' && document.querySelector('#trip [data-act=watch]')?.textContent === 'Stop watching');
+    const w = await doc(page, 'spaces/s1/watches/w1|DEN');
+    if (w.price !== 240 || w.name !== 'Denver <b>' || Object.keys(w).length !== 6) throw new Error('watch doc: ' + JSON.stringify(w));
+    await page.evaluate(() => { window.__fake.docs['spaces/s1/watches/w1|DEN'].last = 200; });
+    await click(page, '#trip .back');
+    await text(page, '#trips', 'since you started watching');
+    const t = await page.$eval('#trips', el => el.textContent);
+    if (!t.includes('Watching') || !t.includes('↓ $40')) throw new Error('watching section: ' + t.slice(0, 300));
+    await click(page, '#trips [data-trip] .city');
+    await click(page, '#trip [data-act=watch]'); // stop watching
+    await page.waitForFunction(() => !window.__fake.docs['spaces/s1/watches/w1|DEN'] && document.querySelector('#trip [data-act=watch]')?.textContent === 'Watch price');
+    await page.evaluate(() => { for (const n of [1, 2, 3]) window.__fake.docs['spaces/s1/watches/x' + n] = { window_id: 'z', code: 'AAA', name: 'x', at: '2030' }; });
+    await click(page, '#trip [data-act=watch]'); // a 4th is refused
+    await text(page, '#toast', 'You can watch 3 trips at a time');
+    await page.evaluate(() => { for (const n of [1, 2, 3]) delete window.__fake.docs['spaces/s1/watches/x' + n]; });
+    await click(page, '#trip .back');
+    await text(page, '#trips', 'Top picks');
   });
 
   await run('trip details: back restores the scroll position', async () => {

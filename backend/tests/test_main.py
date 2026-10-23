@@ -161,6 +161,19 @@ def test_google_typical_range_becomes_the_usual_price_for_that_city_type_and_mon
     assert len(st.fs.docs("spaces/s1/typical")) > len(t)                      # the next ones, not the same again
 
 
+def test_watch_pushes_when_the_price_moves_and_drops_past_trips():
+    st, f = fresh(), Fakes()                                    # every search answers $858 total = $429 each
+    W = "weekend:2026-11-06:2026-11-08"
+    st._set("watches", f"{W}|DEN", {"window_id": W, "code": "DEN", "name": "Denver", "by": "a@b.c", "at": "1", "price": 500})
+    st._set("watches", "weekend:2026-10-02:2026-10-04|DEN", {"window_id": "weekend:2026-10-02:2026-10-04", "code": "DEN", "name": "Denver", "by": "a@b.c", "at": "0", "price": 500})
+    main.watches(CFG, st, date(2026, 10, 17), lambda p: f.get(p, "k"), f.send)
+    assert list(st.fs.docs("spaces/s1/watches")) == [f"{W}|DEN"] and len(f.params) == 1
+    assert f.sent[0][:3] == ("Flybye watch: Denver", "Down to $429 per person (was $500).", {"window_id": W, "code": "DEN", "space": "s1"})
+    assert st.watches()[0][1]["last"] == 429 and st.watches()[0][1]["low"] == 429
+    main.watches(CFG, st, date(2026, 10, 18), lambda p: f.get(p, "k"), f.send)
+    assert len(f.sent) == 1                                     # unchanged price: quiet
+
+
 def test_every_daily_run_writes_the_suggestions_doc():
     st, f = fresh(), Fakes()
     run(date(2026, 10, 17), f, st)                              # a Saturday: no summary, still published

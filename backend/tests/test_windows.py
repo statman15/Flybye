@@ -2,7 +2,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from flybye.cal import Event
-from flybye.windows import Window, candidates, holidays, is_free
+from flybye.windows import Window, candidates, days_off, holidays, is_free
 
 TZ = ZoneInfo("America/Chicago")
 TRIPS = {"weekend": {"enabled": True, "weeks": [2, 10]},
@@ -75,3 +75,10 @@ def test_all_day_saturday_blocks():
 
 def test_monday_morning_after_return_is_fine():
     assert is_free(FRI, [ev(datetime(2026, 11, 16, 8, tzinfo=TZ), datetime(2026, 11, 16, 9, tzinfo=TZ))])
+
+
+def test_days_off_counts_weekdays_that_are_not_holidays():
+    d = lambda a, b: days_off(Window("x", date.fromisoformat(a), date.fromisoformat(b), None))
+    assert (d("2026-11-06", "2026-11-08"), d("2026-11-05", "2026-11-08"), d("2026-11-06", "2026-11-09")) == (0, 1, 1)  # Fri-Sun, Thu-Sun, Fri-Mon
+    assert d("2026-09-04", "2026-09-07") == 0                                                                       # Fri-Mon is Labor Day
+    assert d("2026-11-07", "2026-11-14") == 5                                                                       # Sat-Sat

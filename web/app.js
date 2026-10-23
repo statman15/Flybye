@@ -190,6 +190,14 @@ const acts = {
       el.parentElement.insertAdjacentHTML('afterend', `<input class="pad" readonly value="${esc(url)}" onfocus="this.select()">`);
     }
   },
+  // The job re-checks watched trips every morning and pushes when the price moves.
+  watch: el => act(async () => {
+    const ref = sref('watches', tripKey);
+    if ((await getDoc(ref)).exists()) return deleteDoc(ref);
+    if ((await getDocs(collection(db, 'spaces', S.sid, 'watches'))).docs.length >= 3) throw new Error('You can watch 3 trips at a time. Stop one first.');
+    const i = tripKey.lastIndexOf('|');
+    await setDoc(ref, { window_id: tripKey.slice(0, i), code: tripKey.slice(i + 1), name: el.dataset.name, by: me, at: new Date().toISOString(), price: +el.dataset.price });
+  }),
   rank: el => { const p = el.nextElementSibling; p.hidden = !p.hidden; el.setAttribute('aria-expanded', !p.hidden); },
 };
 // Two taps to remove: the first turns the button into "Tap again to remove".
@@ -337,11 +345,15 @@ function rankHtml(sc) {
   return `<div class="rank" hidden>${rows.map(([l, v]) => `<p><span>${esc(l)}</span><b>${esc(pts(v))}</b></p>`).join('')}<p class="total"><span>Score</span><b>${esc(Math.round(sc.total * 10) / 10)}</b></p></div>`;
 }
 // "Fri, Nov 6 → Sun, Nov 8 · 3 days": days counted like a trip, both ends included.
-const dates = w => (w.out ? `${day(w.out)} → ${day(w.ret)} · ${Math.round((toDate(w.ret) - toDate(w.out)) / 864e5) + 1} days` : '');
+// w.off (weekdays that aren't holidays) adds " · 2 days off".
+const dates = w => (w.out ? `${day(w.out)} → ${day(w.ret)} · ${Math.round((toDate(w.ret) - toDate(w.out)) / 864e5) + 1} days${Number.isFinite(w.off) ? ' · ' + (w.off ? `${w.off} day${w.off > 1 ? 's' : ''} off` : 'no days off') : ''}` : '');
+// Google's typical range says whether now is a good time to book.
+const LEVELS = { low: 'Low for these dates · good time to book', typical: 'Typical price · no rush', high: 'Higher than usual · worth waiting' };
+const levelLine = p => (LEVELS[p.level] && p.range ? `<p class="meta${p.level === 'low' ? ' deal' : ''}">${LEVELS[p.level]} (Google’s usual ${esc(money(p.range[0]))}–${esc(money(p.range[1]))})</p>` : '');
 // Inside the sections: one line per city. The full card (and Why this rank) is a tap away on the trip screen.
 function pickRow(p, w) {
   const pct = p.usual > 0 ? Math.round((1 - p.price / p.usual) * 100) : 0;
-  const bits = [dur(p.minutes), p.stops ? stopsText(p.stops) : '', Number.isFinite(p.weather?.hi_f) ? deg(p.weather.hi_f) + ' high' : '', p.flex ? 'Flexible dates' : ''];
+  const bits = [dur(p.minutes), p.stops ? stopsText(p.stops) : '', Number.isFinite(p.weather?.hi_f) ? deg(p.weather.hi_f) + ' high' : '', p.flex ? 'Flexible dates' : '', p.level === 'low' ? 'Good time to book' : ''];
   return `<li><button data-trip="${esc(w.id)}|${esc(p.code)}"${p.wish ? '' : ' class="look"'}><span class="t city">${esc(p.name)}</span><span class="price">${esc(money(p.price))}</span>
     <span class="why">${pct > 0 ? `<b class="deal">${pct}% under usual</b> · ` : ''}${bits.filter(Boolean).map(esc).join(' · ')}</span></button></li>`;
 }
@@ -353,6 +365,7 @@ function pickCard(p, w) {
     <p class="meta">${[dur(p.minutes), stopsText(p.stops), p.airline, p.hotel != null ? 'hotel ' + money(p.hotel) : ''].filter(Boolean).map(esc).join(' · ')}</p>
     ${wx ? `<p class="meta wx">${esc(wx)}</p>` : ''}
     ${pct > 0 ? `<p class="meta deal">${pct}% under usual (${esc(money(p.usual))})</p>` : ''}
+    ${levelLine(p)}
     <div class="tags">${p.wish ? '<span class="tag on">Wish list</span>' : '<span class="tag look">Worth a look</span>'}${p.flex ? '<span class="tag" title="Google picked these dates as the cheapest week">Flexible dates</span>' : ''}</div>
     <div class="row"><a class="pill small" href="${esc(safeUrl(p.link))}" target="_blank" rel="noopener noreferrer">Google Flights</a>
     ${p.score ? '<button class="pill small quiet" data-act="rank" aria-expanded="false">Why this rank</button>' + rankHtml(p.score) : ''}</div>
@@ -368,6 +381,13 @@ async function renderTrips() {
     return;
   }
   const s = sugg = snap.data();
+  const watched = (await getDocs(collection(db, 'spaces', S.sid, 'watches'))).docs.map(d => d.data()).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const watching = watched.map(x => {
+    const [, out, ret] = x.window_id.split(':'), w = windowOf(s, x.window_id), d = (x.last ?? x.price) - x.price;
+    const open = w?.picks?.some(p => p.code === x.code) ? ` data-trip="${esc(x.window_id)}|${esc(x.code)}"` : ' disabled';
+    return `<li><button${open}><span class="t city">${esc(x.name)}</span><span class="price">${esc(money(x.last ?? x.price))}</span>
+      <span class="why">${esc(dates({ out, ret }))} · ${d ? `<b class="${d < 0 ? 'deal' : ''}">${d < 0 ? '↓' : '↑'} ${esc(money(Math.abs(d)))}</b> since you started watching` : 'no change since you started watching'}</span></button></li>`;
+  }).join('');
   const top = (s.top || []).map(p => pickCard(p, windowOf(s, p.window_id) || { id: p.window_id }));
   // Sections by trip type (native <details>, closed until tapped); longer trips split at the border.
   const abroad = p => (p.country || '') !== 'United States';
@@ -386,7 +406,7 @@ async function renderTrips() {
     return `<details class="kind" data-sec="${i}"${openSecs.has(i) ? ' open' : ''}><summary>${esc(title)} <small>${wins.length} date${wins.length > 1 ? 's' : ''}</small></summary>${html}</details>`;
   }).join('');
   el.innerHTML = `<div class="head"><h1>Trips</h1><p class="sub">${esc(S.name)} · updated ${esc(s.updated ? toDate(s.updated).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'never')}</p></div>
-    ${top.length ? `<h2 class="sec">Top picks</h2>${top.join('')}` : ''}${body || '<div class="empty"><p>No priced trips fit your free dates yet.</p></div>'}`;
+    ${watching ? `<h2 class="sec">Watching</h2><ul class="rows group">${watching}</ul>` : ''}${top.length ? `<h2 class="sec">Top picks</h2>${top.join('')}` : ''}${body || '<div class="empty"><p>No priced trips fit your free dates yet.</p></div>'}`;
   highlight();
 }
 const windowOf = (s, id) => (s?.windows || []).find(w => w.id === id);
@@ -453,10 +473,13 @@ async function renderTrip() {
   const w = windowOf(sugg, wid) || { id: wid };
   const p = [...(sugg?.top || []), ...(w.picks || [])].find(x => x.window_id === wid && x.code === code) || (w.picks || []).find(x => x.code === code);
   if (!p) return go('trips', { replace: true });
+  const watched = (await getDoc(sref('watches', key))).exists();
   el.innerHTML = `<div class="head"><button class="back" data-go="trips">‹ Trips</button><h1>${esc(p.name)}</h1>
     <p class="sub">${esc(dates(w))}${w.holiday ? ' · ' + esc(w.holiday) : ''}</p></div>
     <div class="pad"><p class="meta">${[money(p.price) + ' per person', dur(p.minutes), stopsText(p.stops), p.airline].filter(Boolean).map(esc).join(' · ')}</p>
     ${wxLine(p.weather) ? `<p class="meta wx">${esc(wxLine(p.weather))}</p>` : ''}
+    ${levelLine(p)}
+    <div class="row"><button class="pill small${watched ? ' quiet' : ''}" data-act="watch" data-name="${esc(p.name)}" data-price="${esc(p.price)}">${watched ? 'Stop watching' : 'Watch price'}</button></div>
     ${p.score ? '<div class="row"><button class="pill small quiet" data-act="rank" aria-expanded="false">Why this rank</button>' + rankHtml(p.score) + '</div>' : ''}</div>
     <div id="times"><p class="pad muted"><span class="spin" aria-hidden="true"></span> Looking up flight times…</p></div>`;
   let html;

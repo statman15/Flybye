@@ -4,6 +4,8 @@ import statistics
 import urllib.parse
 from datetime import date
 
+from .windows import days_off
+
 
 def allowance(cap, used, today):
     days_left = calendar.monthrange(today.year, today.month)[1] - today.day + 1
@@ -151,11 +153,14 @@ def top(ranked_rows, cfg):
 def _pick(r, baselines, windows, cfg):
     city = city_for(r["code"], cfg)
     why = parts(r, baselines.get(bkey(r)), windows[r["window_id"]], cfg)
+    t = r.get("typical")
+    level = None if not t else "low" if r["price"] <= t["low"] else "high" if r["price"] >= t["high"] else "typical"
     return {"code": r["code"], "name": city["name"] if city else r["name"], "price": each(r["price"], cfg),
             "usual": each(baselines.get(bkey(r)), cfg), "minutes": r["minutes"], "stops": r["stops"],
             "hotel": r.get("hotel"), "airline": r.get("airline"), "airline_code": r.get("airline_code"), "wish": bool(city),
             "link": flights_link(r, cfg), "weather": r.get("weather"), "score": {k: round(v, 1) for k, v in why.items()},
-            "country": r.get("country"), "flex": r.get("source") == "flex"}
+            "country": r.get("country"), "flex": r.get("source") == "flex",
+            "level": level, "range": [each(t["low"], cfg), each(t["high"], cfg)] if t else None}
 
 
 def suggestions(rows, baselines, windows, cfg, updated):
@@ -172,7 +177,7 @@ def suggestions(rows, baselines, windows, cfg, updated):
         keep = [r for r in mine if city_for(r["code"], cfg)] + [r for r in mine if not city_for(r["code"], cfg)][:3]
         picks = [_pick(r, baselines, windows, cfg) for r in keep]
         if picks:
-            out.append({"id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "holiday": w.holiday, "picks": picks})
+            out.append({"id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "holiday": w.holiday, "off": days_off(w), "picks": picks})
     return {"updated": updated, "windows": out,
             "top": [{**_pick(r, baselines, windows, cfg), "window_id": r["window_id"]} for r in wish + ([other] if other else [])]}
 

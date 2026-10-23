@@ -64,6 +64,13 @@ service cloud.firestore {
       match /latest/{id} { allow read: if member(sid); }
       match /routes/{id} { allow read: if member(sid); }
 
+      // A member watches a trip; the job (Admin SDK) adds last, low and checked.
+      match /watches/{id} {
+        allow read, delete: if member(sid);
+        allow create: if member(sid) && request.resource.data.keys().hasOnly(['window_id', 'code', 'name', 'by', 'at', 'price'])
+          && request.resource.data.by == mail();
+      }
+
       // The app may only change `override`; everything else on a label belongs to the job.
       match /labels/{id} {
         allow read: if member(sid);
