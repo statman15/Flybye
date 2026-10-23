@@ -133,7 +133,7 @@ class Store:
 
     def watches(self):
         """[(id, watch)] oldest first."""
-        return sorted(((s.id, s.to_dict()) for s in self._col("watches").stream()), key=lambda x: x[1]["at"])
+        return sorted(((s.id, s.to_dict()) for s in self._col("watches").stream()), key=lambda x: str(x[1].get("at", "")))
 
     def set_watch(self, id, fields):
         self._set("watches", id, fields, merge=True)

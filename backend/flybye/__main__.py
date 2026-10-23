@@ -167,7 +167,7 @@ def watches(cfg, st, today, get, send):
         except serp.Fatal:
             raise
         except Exception as e:  # one bad search shouldn't stop the other watches
-            print(f"watch failed for {w['code']} {w['window_id']}: {e}", file=sys.stderr)
+            print(f"watch failed ({type(e).__name__})", file=sys.stderr)  # public logs: no dates
 
 
 def instant_alerts(cfg, st, today, rows, get, send):
@@ -267,7 +267,7 @@ def daily(cfg, st, today, fetch=cal.fetch, chat=ai.http_chat, get=serp.http_get,
                 try:
                     watches(cfg, st, today, search, send)
                 except Exception as e:  # incl. serp.Fatal: sweep will hit the same wall and say so
-                    print(f"watches failed: {e}", file=sys.stderr)
+                    print(f"watches failed ({type(e).__name__})", file=sys.stderr)
                     errors.append("Price watch failed")
                 rows = sweep(cfg, st, today, windows, search, send, errors, fits)
                 try:

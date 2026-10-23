@@ -68,7 +68,8 @@ service cloud.firestore {
       match /watches/{id} {
         allow read, delete: if member(sid);
         allow create: if member(sid) && request.resource.data.keys().hasOnly(['window_id', 'code', 'name', 'by', 'at', 'price'])
-          && request.resource.data.by == mail();
+          && request.resource.data.by == mail() && request.resource.data.price is number
+          && request.resource.data.window_id is string && request.resource.data.code is string && request.resource.data.at is string;
       }
 
       // The app may only change `override`; everything else on a label belongs to the job.
