@@ -273,3 +273,13 @@ def test_explore_rows_carry_the_country():
     get, _ = fake_get("explore.json")
     rows = serp.explore(WE, None, CFG, new_store(), get)
     assert {r["country"] for r in rows} == {"United States"}
+
+
+def test_flights_rows_carry_the_arrival_country_and_fill_older_rows():
+    d = json.load(open(FIX / "flights.json"))
+    d["airports"] = [{"arrival": [{"country": "Portugal"}]}]
+    row = serp.flights(LONG, ["OPO"], 2, "Porto", CFG, new_store(), lambda p: d)
+    assert row["country"] == "Portugal"
+    old = {**row, "country": None, "out": str(LONG.out)}
+    doc = pick.suggestions([old, {**old, "price": old["price"] + 1, "country": "Portugal"}], {}, {LONG.id: LONG}, CFG, "now")
+    assert {p["country"] for w in doc["windows"] for p in w["picks"]} == {"Portugal"}

@@ -96,9 +96,10 @@ def flights(w, airports, stops, name, cfg, st, get):
     best = min(_itins(d), key=lambda x: x["price"], default=None)
     if not best:
         return None
+    arrive = (d.get("airports") or [{}])[0].get("arrival") or [{}]
     return _row(w, airports[0], name, best["price"], None, best["total_duration"],
                 best["flights"][0]["airline"], len(best.get("layovers", [])), "flights",
-                (best["flights"][0].get("flight_number") or "").split(" ")[0] or None)
+                (best["flights"][0].get("flight_number") or "").split(" ")[0] or None, country=arrive[0].get("country"))
 
 
 def confirm(row, cfg, st, get):

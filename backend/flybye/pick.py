@@ -160,6 +160,9 @@ def _pick(r, baselines, windows, cfg):
 
 def suggestions(rows, baselines, windows, cfg, updated):
     """The suggestions/current document the app shows."""
+    # a country seen for an airport fills rows that lack one (wish-city searches stored before they kept it)
+    known = {r["code"]: r["country"] for r in rows if r.get("country")}
+    rows = [{**r, "country": r.get("country") or known.get(r["code"])} for r in rows]
     best = ranked(rows, baselines, windows, cfg)
     wish, other = top(best, cfg)
     out = []
