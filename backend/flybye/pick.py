@@ -107,8 +107,11 @@ def score(row, base, w, cfg):
 
 
 def keep(rows, cfg):
-    """Rows of airlines the space doesn't avoid."""
-    return [r for r in rows if r.get("airline_code") not in cfg["airlines"]["avoid"]]
+    """Rows of airlines the space doesn't avoid. Explore lists a two-airline trip as "American and Frontier" with code
+    "multi", so names count too: learned from the single-airline rows alongside (rows are stored unfiltered for this)."""
+    avoid = cfg["airlines"]["avoid"]
+    names = {r["airline"] for r in rows if r.get("airline_code") in avoid and r.get("airline")}
+    return [r for r in rows if r.get("airline_code") not in avoid and not any(n in (r.get("airline") or "") for n in names)]
 
 
 def _d(iso):

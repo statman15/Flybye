@@ -51,12 +51,12 @@ def test_two_spaces_are_isolated_and_a_broken_one_does_not_stop_the_other():
     assert not any(p.startswith("spaces/a/latest") for p in fs.data)
 
 
-def test_avoided_airlines_are_never_stored_and_preferred_ones_get_the_bonus():
+def test_avoided_airlines_are_never_shown_and_preferred_ones_get_the_bonus():
     st, f = fresh(), Fakes()
     cfg = {**CFG, "airlines": {"prefer": ["AA"], "avoid": ["F9"]}}
     run(date(2026, 10, 17), f, st, cfg)
     stored = [r for d in st.fs.docs("spaces/s1/latest").values() for r in d["rows"]]
-    assert stored and not any(r["airline_code"] == "F9" for r in stored)
+    assert any(r["airline_code"] == "F9" for r in stored)   # stored, so keep() can learn the name "Frontier"
     picks = [p for w in st.fs.data["spaces/s1/suggestions/current"]["windows"] for p in w["picks"]]
     assert picks and all(p["code"] != "DEN" for p in picks)
     assert all((p["score"]["airline"] == 8) == (p["airline_code"] == "AA") for p in picks)

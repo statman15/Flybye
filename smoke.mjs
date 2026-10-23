@@ -335,7 +335,7 @@ try {
   await run('settings: airlines', async () => {
     await set(page, '#airForm [name=code]', 'u');
     await click(page, '#airForm button');
-    await text(page, '#airForm .err', '2 letters or digits');
+    await text(page, '#airForm .err', '2-letter code');
     await set(page, '#airForm [name=list]', 'avoid');
     await set(page, '#airForm [name=code]', 'nk');
     await click(page, '#airForm button');
@@ -349,6 +349,10 @@ try {
     await page.waitForFunction(() => window.__fake.docs['spaces/s1/settings/main'].airlines.prefer.length === 0);
     const a = (await doc(page, 'spaces/s1/settings/main')).airlines;
     if (a.avoid.join() !== 'NK') throw new Error('airlines: ' + JSON.stringify(a));
+    await set(page, '#airForm [name=list]', 'prefer');
+    await set(page, '#airForm [name=pick]', 'JL'); // from the dropdown
+    await click(page, '#airForm button');
+    await text(page, '#settings', 'JL Japan Airlines');
   });
 
   await run('settings: members (owner)', async () => {

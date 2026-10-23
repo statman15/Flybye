@@ -131,9 +131,10 @@ def test_no_weather_means_no_weather_points():
 
 
 def test_avoided_airlines_are_dropped_and_preferred_ranked_higher():
-    rows = [row("DEN", 400, name="Denver"), {**row("BNA", 400, name="Nashville"), "airline_code": "F9"},
-            {**row("ATL", 400, name="Atlanta"), "airline_code": "DL"}]
-    assert [r["code"] for r in pick.keep(rows, CFG)] == ["DEN", "ATL"]
+    rows = [row("DEN", 400, name="Denver"), {**row("BNA", 400, name="Nashville"), "airline_code": "F9", "airline": "Frontier"},
+            {**row("ATL", 400, name="Atlanta"), "airline_code": "DL", "airline": "Delta"},
+            {**row("LAS", 300, name="Las Vegas"), "airline_code": "multi", "airline": "American and Frontier"}]
+    assert [r["code"] for r in pick.keep(rows, CFG)] == ["DEN", "ATL"]   # the two-airline Frontier trip goes too
     assert pick.score(rows[0], None, WE, CFG) - pick.score(rows[2], None, WE, CFG) == 8 + 10   # prefer + wish
 
 

@@ -7,7 +7,10 @@ import { VERSION } from './version.js';
 const cap = window.Capacitor;
 const native = cap?.isNativePlatform?.();
 const KINDS = { weekend: 'Weekend', '3day': '3-day weekend', long: 'Longer trip' };
-const AIRLINES = { AA: 'American', DL: 'Delta', UA: 'United', WN: 'Southwest', B6: 'JetBlue', AS: 'Alaska', NK: 'Spirit', F9: 'Frontier', G4: 'Allegiant', HA: 'Hawaiian' };
+const AIRLINES = { AA: 'American', DL: 'Delta', UA: 'United', WN: 'Southwest', B6: 'JetBlue', AS: 'Alaska', NK: 'Spirit', F9: 'Frontier', G4: 'Allegiant', HA: 'Hawaiian',
+  SY: 'Sun Country', AC: 'Air Canada', AM: 'Aeromexico', NH: 'ANA', JL: 'Japan Airlines', KE: 'Korean Air', CX: 'Cathay Pacific', AF: 'Air France', KL: 'KLM',
+  LH: 'Lufthansa', LX: 'SWISS', BA: 'British Airways', VS: 'Virgin Atlantic', EI: 'Aer Lingus', IB: 'Iberia', TP: 'TAP Air Portugal', FI: 'Icelandair',
+  TK: 'Turkish Airlines', QR: 'Qatar Airways', EK: 'Emirates', CM: 'Copa' };
 // Mirrors config.yaml: what a new space starts with, so its owner can open Setup -> Basics right away.
 const DEFAULT_SETTINGS = { home: 'ORD',
   trips: { weekend: { enabled: true, weeks: [2, 10] }, '3day': { enabled: true, weeks: [2, 12] }, long: { enabled: true, weeks: [3, 17], nights: [7] } },
@@ -247,8 +250,8 @@ const forms = {
   },
   basicForm: async f => { await mutate(readBasics(f)); toast('Saved'); },
   airForm: async f => {
-    const list = f.list.value, code = f.code.value.trim().toUpperCase();
-    if (!IATA.test(code)) throw new Error('Airline codes are 2 letters or digits, like UA or B6.');
+    const list = f.list.value, code = (f.code.value.trim() || f.pick.value).toUpperCase();
+    if (!IATA.test(code)) throw new Error('Pick an airline, or type its 2-letter code, like UA or B6.');
     await mutate(s => {
       const a = { prefer: [], avoid: [], ...s.airlines }, other = list === 'prefer' ? 'avoid' : 'prefer';
       if (a[other].includes(code)) throw new Error(`${code} is already on the ${other} list.`);
@@ -606,8 +609,8 @@ async function renderSettings() {
         <p class="meta" style="margin:12px 0 6px">Avoid</p><div class="tags">${chips(air.avoid, 'avoid')}</div></div>
       <form class="group form" id="airForm" novalidate>
         <div class="two"><label>List<select name="list"><option value="prefer">Prefer</option><option value="avoid">Avoid</option></select></label>
-        <label>Airline code<input name="code" maxlength="2" autocapitalize="characters" autocomplete="off" placeholder="UA"></label></div>
-        <p class="hint">${Object.entries(AIRLINES).map(([c, n]) => esc(`${c} ${n}`)).join(' · ')}</p>
+        <label>Airline<select name="pick"><option value="">Choose…</option>${Object.entries(AIRLINES).sort((a, b) => a[1].localeCompare(b[1])).map(([c, n]) => `<option value="${c}">${esc(n)}</option>`).join('')}</select></label></div>
+        <label>Not listed? Its 2-letter code<input name="code" maxlength="2" autocapitalize="characters" autocomplete="off" placeholder="On Google Flights it starts the flight number"></label>
         <p class="err"></p><button class="pill" type="submit">Add airline</button></form>`
       : '<div class="empty"><p>No settings yet. The morning search creates them the first time it runs.</p></div>'}
     ${calBlock(k)}${keysBlock(k)}

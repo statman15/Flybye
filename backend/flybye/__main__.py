@@ -136,9 +136,9 @@ def sweep(cfg, st, today, windows, get, send, errors, fits=lambda w: False):
         k = (r["window_id"], r["code"])
         if k not in cheapest or r["price"] < cheapest[k]["price"]:
             cheapest[k] = r
-    rows = pick.keep(list(cheapest.values()), cfg)
-    st.add_prices(rows, str(today))
-    return rows
+    rows = list(cheapest.values())
+    st.add_prices(rows, str(today))  # avoided airlines too: keep() learns their names from them
+    return pick.keep(rows, cfg)
 
 
 def watches(cfg, st, today, get, send):
