@@ -101,7 +101,7 @@ const gatePicker = () => showGate(`<div class="head"><h1>Pick a space</h1><p cla
   ${isAdmin ? '<div class="pad"><button class="pill quiet" data-act="admin">Admin</button></div>' : ''}`);
 
 // --- Tabs. Setup, Admin and Trip are screens, not tabs: no dock button, reached from elsewhere.
-const views = { trips: renderTrips, wish: renderWish, settings: renderSettings, cal: renderCal, activity: renderActivity, setup: renderSetup, admin: renderAdmin, trip: renderTrip };
+const views = { trips: renderTrips, watch: renderWatch, wish: renderWish, settings: renderSettings, cal: renderCal, activity: renderActivity, setup: renderSetup, admin: renderAdmin, trip: renderTrip };
 const refresh = () => guard($('#' + tab), views[tab]);
 // Screen changes are history entries (same URL: the hash belongs to push links), so Android's back button walks them.
 async function go(t, { y = 0, push = true, replace = false } = {}) {
@@ -381,13 +381,6 @@ async function renderTrips() {
     return;
   }
   const s = sugg = snap.data();
-  const watched = (await getDocs(collection(db, 'spaces', S.sid, 'watches'))).docs.map(d => d.data()).sort((a, b) => String(a.at).localeCompare(String(b.at)));
-  const watching = watched.map(x => {
-    const [, out, ret] = x.window_id.split(':'), w = windowOf(s, x.window_id), d = (x.last ?? x.price) - x.price;
-    const open = w?.picks?.some(p => p.code === x.code) ? ` data-trip="${esc(x.window_id)}|${esc(x.code)}"` : ' disabled';
-    return `<li><button${open}><span class="t city">${esc(x.name)}</span><span class="price">${esc(money(x.last ?? x.price))}</span>
-      <span class="why">${esc(dates({ out, ret }))} · ${d ? `<b class="${d < 0 ? 'deal' : ''}">${d < 0 ? '↓' : '↑'} ${esc(money(Math.abs(d)))}</b> since you started watching` : 'no change since you started watching'}</span></button></li>`;
-  }).join('');
   const top = (s.top || []).map(p => pickCard(p, windowOf(s, p.window_id) || { id: p.window_id }));
   // Sections by trip type (native <details>, closed until tapped); longer trips split at the border.
   const abroad = p => (p.country || '') !== 'United States';
@@ -406,13 +399,27 @@ async function renderTrips() {
     return `<details class="kind" data-sec="${i}"${openSecs.has(i) ? ' open' : ''}><summary>${esc(title)} <small>${wins.length} date${wins.length > 1 ? 's' : ''}</small></summary>${html}</details>`;
   }).join('');
   el.innerHTML = `<div class="head"><h1>Trips</h1><p class="sub">${esc(S.name)} · updated ${esc(s.updated ? toDate(s.updated).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'never')}</p></div>
-    ${watching ? `<h2 class="sec">Watching</h2><ul class="rows group">${watching}</ul>` : ''}${top.length ? `<h2 class="sec">Top picks</h2>${top.join('')}` : ''}${body || '<div class="empty"><p>No priced trips fit your free dates yet.</p></div>'}`;
+    ${top.length ? `<h2 class="sec">Top picks</h2>${top.join('')}` : ''}${body || '<div class="empty"><p>No priced trips fit your free dates yet.</p></div>'}`;
   highlight();
 }
 const windowOf = (s, id) => (s?.windows || []).find(w => w.id === id);
+
+// --- Watch: the trips someone tapped "Watch price" on; the job re-checks them every morning.
+async function renderWatch() {
+  const s = sugg = (await getDoc(sref('suggestions', 'current'))).data() || null;
+  const watched = (await getDocs(collection(db, 'spaces', S.sid, 'watches'))).docs.map(d => d.data()).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const watching = watched.map(x => {
+    const [, out, ret] = x.window_id.split(':'), w = windowOf(s, x.window_id), d = (x.last ?? x.price) - x.price;
+    const open = w?.picks?.some(p => p.code === x.code) ? ` data-trip="${esc(x.window_id)}|${esc(x.code)}"` : ' disabled';
+    return `<li><button${open}><span class="t city">${esc(x.name)}</span><span class="price">${esc(money(x.last ?? x.price))}</span>
+      <span class="why">${esc(dates({ out, ret }))} · ${d ? `<b class="${d < 0 ? 'deal' : ''}">${d < 0 ? '↓' : '↑'} ${esc(money(Math.abs(d)))}</b> since you started watching` : 'no change since you started watching'}</span></button></li>`;
+  }).join('');
+  $('#watch').innerHTML = `<div class="head"><h1>Watching</h1><p class="sub">Checked every morning. You get a push when the price moves.</p></div>
+    ${watching ? `<ul class="rows group">${watching}</ul>` : '<div class="empty"><h2>Nothing watched yet</h2><p>Open a trip and tap Watch price to follow it here (3 at a time).</p></div>'}`;
+}
 const openSecs = new Set(); // which sections stay open across refreshes
 $('#trips').addEventListener('toggle', ev => { const i = Number(ev.target.dataset?.sec); if (!Number.isNaN(i)) ev.target.open ? openSecs.add(i) : openSecs.delete(i); }, true);
-$('#trips').addEventListener('click', ev => {
+for (const id of ['#trips', '#watch']) $(id).addEventListener('click', ev => {
   if (ev.target.closest('a, [data-act]')) return;
   const card = ev.target.closest('[data-trip]');
   if (card) { tripKey = card.dataset.trip; tripY = scrollY; go('trip'); }

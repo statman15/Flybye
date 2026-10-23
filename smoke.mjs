@@ -177,17 +177,21 @@ try {
     if (w.price !== 240 || w.name !== 'Denver <b>' || Object.keys(w).length !== 6) throw new Error('watch doc: ' + JSON.stringify(w));
     await page.evaluate(() => { window.__fake.docs['spaces/s1/watches/w1|DEN'].last = 200; });
     await click(page, '#trip .back');
-    await text(page, '#trips', 'since you started watching');
-    const t = await page.$eval('#trips', el => el.textContent);
-    if (!t.includes('Watching') || !t.includes('↓ $40')) throw new Error('watching section: ' + t.slice(0, 300));
-    await click(page, '#trips [data-trip] .city');
+    await click(page, '#tabs [data-go=watch]');
+    await text(page, '#watch', 'since you started watching');
+    const t = await page.$eval('#watch', el => el.textContent);
+    if (!t.includes('Watching') || !t.includes('↓ $40')) throw new Error('watching tab: ' + t.slice(0, 300));
+    if ((await page.$eval('#tabs [data-go=wish]', el => el.textContent)) !== 'Wish') throw new Error('Wish tab label');
+    await click(page, '#watch [data-trip] .city');
     await click(page, '#trip [data-act=watch]'); // stop watching
     await page.waitForFunction(() => !window.__fake.docs['spaces/s1/watches/w1|DEN'] && document.querySelector('#trip [data-act=watch]')?.textContent === 'Watch price');
     await page.evaluate(() => { for (const n of [1, 2, 3]) window.__fake.docs['spaces/s1/watches/x' + n] = { window_id: 'z', code: 'AAA', name: 'x', at: '2030' }; });
     await click(page, '#trip [data-act=watch]'); // a 4th is refused
     await text(page, '#toast', 'You can watch 3 trips at a time');
     await page.evaluate(() => { for (const n of [1, 2, 3]) delete window.__fake.docs['spaces/s1/watches/x' + n]; });
-    await click(page, '#trip .back');
+    await click(page, '#trip .back'); // back to the Watch tab it came from
+    await text(page, '#watch', 'Nothing watched yet');
+    await click(page, '#tabs [data-go=trips]');
     await text(page, '#trips', 'Top picks');
   });
 
