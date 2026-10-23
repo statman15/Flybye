@@ -345,8 +345,8 @@ function rankHtml(sc) {
   return `<div class="rank" hidden>${rows.map(([l, v]) => `<p><span>${esc(l)}</span><b>${esc(pts(v))}</b></p>`).join('')}<p class="total"><span>Score</span><b>${esc(Math.round(sc.total * 10) / 10)}</b></p></div>`;
 }
 // "Fri, Nov 6 → Sun, Nov 8 · 3 days": days counted like a trip, both ends included.
-// w.off (weekdays that aren't holidays) adds " · 2 days off".
-const dates = w => (w.out ? `${day(w.out)} → ${day(w.ret)} · ${Math.round((toDate(w.ret) - toDate(w.out)) / 864e5) + 1} days${Number.isFinite(w.off) ? ' · ' + (w.off ? `${w.off} day${w.off > 1 ? 's' : ''} off` : 'no days off') : ''}` : '');
+// w.off (weekdays that aren't holidays) adds " · 2 days PTO".
+const dates = w => (w.out ? `${day(w.out)} → ${day(w.ret)} · ${Math.round((toDate(w.ret) - toDate(w.out)) / 864e5) + 1} days${Number.isFinite(w.off) ? ' · ' + (w.off ? `${w.off} day${w.off > 1 ? 's' : ''} PTO` : 'no PTO') : ''}` : '');
 // Google's typical range says whether now is a good time to book.
 const LEVELS = { low: 'Low for these dates · good time to book', typical: 'Typical price · no rush', high: 'Higher than usual · worth waiting' };
 const levelLine = p => (LEVELS[p.level] && p.range ? `<p class="meta${p.level === 'low' ? ' deal' : ''}">${LEVELS[p.level]} (Google’s usual ${esc(money(p.range[0]))}–${esc(money(p.range[1]))})</p>` : '');

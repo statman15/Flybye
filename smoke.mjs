@@ -169,7 +169,7 @@ try {
     await click(page, '#trip .back');
     await text(page, '#trips', 'Top picks');
     const html = await page.$eval('#trips', el => el.innerHTML);
-    if (!html.includes('Sun, Nov 8 · 3 days · 1 day off') || !html.includes('Low for these dates · good time to book (Google’s usual $200–$350)') || !html.includes('Good time to book')) throw new Error('days off or verdict missing');
+    if (!html.includes('Sun, Nov 8 · 3 days · 1 day PTO') || !html.includes('Low for these dates · good time to book (Google’s usual $200–$350)') || !html.includes('Good time to book')) throw new Error('days off or verdict missing');
     await click(page, '#trips [data-trip] .city');
     await click(page, '#trip [data-act=watch]');
     await page.waitForFunction(() => window.__fake.docs['spaces/s1/watches/w1|DEN']?.by === 'test@example.test' && document.querySelector('#trip [data-act=watch]')?.textContent === 'Stop watching');
