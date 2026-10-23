@@ -64,7 +64,7 @@ const seed = () => ({
   'spaces/s1/private/keys': structuredClone(KEYS),
   'spaces/s1/settings/main': { home: 'ORD', trips: { weekend: { enabled: true, weeks: [2, 10] }, '3day': { enabled: true, weeks: [2, 12] }, long: { enabled: true, weeks: [3, 17], nights: [7] } },
     cities: [{ name: 'Denver <b>', airports: ['DEN'], trips: ['weekend'] }], score: { hour_penalty: 2 }, airlines: { prefer: ['UA'], avoid: [] }, weather: { min_f: 65, max_f: 85 } },
-  'spaces/s1/suggestions/current': { updated: '2026-10-17T12:00:00', windows: [{ id: 'w1', kind: 'weekend', out: '2026-11-06', ret: '2026-11-08', holiday: null, off: 1, picks: [pick()] }],
+  'spaces/s1/suggestions/current': { updated: '2026-10-17T12:00:00', windows: [{ id: 'w1', kind: 'weekend', out: '2026-11-06', ret: '2026-11-08', holiday: null, off: 1, off_eve: 0, picks: [pick()] }],
     top: [pick({ window_id: 'w1', link: 'javascript:alert(1)', weather: { kind: 'typical', hi_f: 45, lo_f: 18, rain_pct: 30 } })] },
   'spaces/s1/labels/a': { title: 'Dentist <img src=x onerror=alert(1)>', start: '2999-01-02', all_day: true, block: true, why: 'Appointment', override: null },
   'spaces/s1/meta/activity': { last_run: '2026-10-18T10:00:00Z', next_run: '2026-10-19T10:00:00Z', month: '2026-10', used: 30, cap: 100,
@@ -225,6 +225,18 @@ try {
     await p.waitForFunction(() => Math.abs(scrollY - 300) < 5);
     await p.goBack();
     await text(p, '#wish', 'Remove');
+    await p.close();
+  });
+
+  await run('trip details: a 5pm+ flight out takes the departure day off the PTO count', async () => {
+    const p = await asTest();
+    await text(p, '#trips', 'Top picks');
+    await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('times:')).forEach(k => localStorage.removeItem(k)));
+    workerMode = 'ok'; TIMES.outbound[0].dep = '2026-11-06 18:30';
+    await click(p, '#trips [data-trip] .city');
+    await text(p, '#trip .sub', 'no PTO');
+    TIMES.outbound[0].dep = '2026-11-06 07:30';
+    await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('times:')).forEach(k => localStorage.removeItem(k)));
     await p.close();
   });
 

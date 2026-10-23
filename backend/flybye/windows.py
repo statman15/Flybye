@@ -49,7 +49,7 @@ def parse(window_id):
 
 
 # kind -> list of (departure weekday, nights)
-SHAPES = {"weekend": [(4, 2)], "3day": [(3, 3), (4, 3)]}
+SHAPES = {"weekend": [(5, 1)], "3day": [(4, 2), (5, 2)]}
 
 
 def candidates(today, trips):
@@ -75,11 +75,12 @@ def span(w):
     return (datetime.combine(w.out, dep, TZ) - BUFFER, datetime.combine(w.ret, RETURN_AT, TZ) + BUFFER)
 
 
-def days_off(w):
-    """Weekdays (not US holidays) the trip uses: the return day counts, Thu/Fri departures leave after work so don't."""
+def days_off(w, evening=False):
+    """PTO days: weekdays (not US holidays) the trip uses, both ends included; evening=True when the flight out leaves
+    at 5pm or later, so the departure day is a work day."""
     hol = {**holidays(w.out.year), **holidays(w.ret.year)}
-    days = (w.out + timedelta(n) for n in range((w.ret - w.out).days + 1))
-    return sum(d.weekday() < 5 and d not in hol and (d != w.out or d.weekday() not in (3, 4)) for d in days)
+    days = (w.out + timedelta(n) for n in range(evening, (w.ret - w.out).days + 1))
+    return sum(d.weekday() < 5 and d not in hol for d in days)
 
 
 def is_free(w, blockers):

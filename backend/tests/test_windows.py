@@ -26,15 +26,16 @@ def test_holidays_2026():
 
 def test_weekend_lead_time_edges():
     w = [x for x in candidates(TODAY, TRIPS) if x.kind == "weekend"]
-    assert all(x.out.weekday() == 4 and (x.ret - x.out).days == 2 for x in w)
-    assert min(x.out for x in w) == date(2026, 11, 6)    # first Fri >= today + 14d
-    assert max(x.out for x in w) == date(2026, 12, 25)   # last Fri <= today + 70d
+    assert all(x.out.weekday() == 5 and (x.ret - x.out).days == 1 for x in w)
+    assert min(x.out for x in w) == date(2026, 10, 31)   # first Sat >= today + 14d
+    assert max(x.out for x in w) == date(2026, 12, 26)   # last Sat <= today + 70d
 
 
-def test_3day_has_thu_sun_and_fri_mon():
+def test_3day_is_fri_sun_or_sat_mon():
     w = [x for x in candidates(TODAY, TRIPS) if x.kind == "3day"]
-    assert Window("3day", date(2026, 11, 5), date(2026, 11, 8), None) in w
-    assert Window("3day", date(2026, 11, 6), date(2026, 11, 9), None) in w
+    assert Window("3day", date(2026, 11, 6), date(2026, 11, 8), None) in w
+    assert Window("3day", date(2026, 11, 7), date(2026, 11, 9), None) in w
+    assert all((x.ret - x.out).days == 2 for x in w)
 
 
 def test_long_is_saturday_seven_nights():
@@ -45,7 +46,7 @@ def test_long_is_saturday_seven_nights():
 
 def test_holiday_tag_on_thanksgiving_3day():
     w = candidates(TODAY, TRIPS)
-    tg = Window("3day", date(2026, 11, 26), date(2026, 11, 29), "Thanksgiving")
+    tg = Window("3day", date(2026, 11, 27), date(2026, 11, 29), "Day after Thanksgiving")
     assert tg in w
 
 
@@ -79,6 +80,7 @@ def test_monday_morning_after_return_is_fine():
 
 def test_days_off_counts_weekdays_that_are_not_holidays():
     d = lambda a, b: days_off(Window("x", date.fromisoformat(a), date.fromisoformat(b), None))
-    assert (d("2026-11-06", "2026-11-08"), d("2026-11-05", "2026-11-08"), d("2026-11-06", "2026-11-09")) == (0, 1, 1)  # Fri-Sun, Thu-Sun, Fri-Mon
-    assert d("2026-09-04", "2026-09-07") == 0                                                                       # Fri-Mon is Labor Day
-    assert d("2026-11-07", "2026-11-14") == 5                                                                       # Sat-Sat
+    assert (d("2026-11-07", "2026-11-08"), d("2026-11-06", "2026-11-08"), d("2026-11-07", "2026-11-09")) == (0, 1, 1)  # Sat-Sun, Fri-Sun, Sat-Mon
+    assert d("2026-09-05", "2026-09-07") == 0                                                                       # Sat-Mon is Labor Day
+    assert d("2026-11-07", "2026-11-14") == 5
+    assert days_off(Window("x", date(2026, 11, 6), date(2026, 11, 9), None), evening=True) == 1                     # Fri 6pm-Mon                                                                       # Sat-Sat

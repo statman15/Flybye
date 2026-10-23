@@ -2,8 +2,8 @@
 home: ORD
 
 trips:                       # weeks = how far ahead the departure can be
-  weekend: {enabled: true, weeks: [2, 10]}    # Fri -> Sun
-  3day:    {enabled: true, weeks: [2, 12]}    # Thu -> Sun and Fri -> Mon
+  weekend: {enabled: true, weeks: [2, 10]}    # Sat -> Sun
+  3day:    {enabled: true, weeks: [2, 12]}    # Fri -> Sun and Sat -> Mon
   long:    {enabled: true, weeks: [3, 17], nights: [7]}   # Sat -> Sat
 
 cities:                      # the wish list: boosts the score; only these can trigger an instant alert

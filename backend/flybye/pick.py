@@ -177,7 +177,7 @@ def suggestions(rows, baselines, windows, cfg, updated):
         keep = [r for r in mine if city_for(r["code"], cfg)] + [r for r in mine if not city_for(r["code"], cfg)][:3]
         picks = [_pick(r, baselines, windows, cfg) for r in keep]
         if picks:
-            out.append({"id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "holiday": w.holiday, "off": days_off(w), "picks": picks})
+            out.append({"id": w.id, "kind": w.kind, "out": str(w.out), "ret": str(w.ret), "holiday": w.holiday, "off": days_off(w), "off_eve": days_off(w, True), "picks": picks})
     return {"updated": updated, "windows": out,
             "top": [{**_pick(r, baselines, windows, cfg), "window_id": r["window_id"]} for r in wish + ([other] if other else [])]}
 

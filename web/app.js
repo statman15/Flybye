@@ -345,8 +345,9 @@ function rankHtml(sc) {
   return `<div class="rank" hidden>${rows.map(([l, v]) => `<p><span>${esc(l)}</span><b>${esc(pts(v))}</b></p>`).join('')}<p class="total"><span>Score</span><b>${esc(Math.round(sc.total * 10) / 10)}</b></p></div>`;
 }
 // "Fri, Nov 6 → Sun, Nov 8 · 3 days": days counted like a trip, both ends included.
-// w.off (weekdays that aren't holidays) adds " · 2 days PTO".
-const dates = w => (w.out ? `${day(w.out)} → ${day(w.ret)} · ${Math.round((toDate(w.ret) - toDate(w.out)) / 864e5) + 1} days${Number.isFinite(w.off) ? ' · ' + (w.off ? `${w.off} day${w.off > 1 ? 's' : ''} PTO` : 'no PTO') : ''}` : '');
+// w.off (weekdays that aren't holidays) adds " · 2 days PTO"; w.eve (flight out leaves 5pm+) uses w.off_eve instead.
+const dates = w => (w.out ? `${day(w.out)} → ${day(w.ret)} · ${Math.round((toDate(w.ret) - toDate(w.out)) / 864e5) + 1} days${pto(w.eve && Number.isFinite(w.off_eve) ? w.off_eve : w.off)}` : '');
+const pto = n => (Number.isFinite(n) ? ' · ' + (n ? `${n} day${n > 1 ? 's' : ''} PTO` : 'no PTO') : '');
 // Google's typical range says whether now is a good time to book.
 const LEVELS = { low: 'Low for these dates · good time to book', typical: 'Typical price · no rush', high: 'Higher than usual · worth waiting' };
 const levelLine = p => (LEVELS[p.level] && p.range ? `<p class="meta${p.level === 'low' ? ' deal' : ''}">${LEVELS[p.level]} (Google’s usual ${esc(money(p.range[0]))}–${esc(money(p.range[1]))})</p>` : '');
@@ -385,7 +386,7 @@ async function renderTrips() {
   // Sections by trip type (native <details>, closed until tapped); longer trips split at the border.
   const abroad = p => (p.country || '') !== 'United States';
   const sections = [['weekend', 'Weekends', () => true], ['3day', '3-day weekends', () => true],
-    ['long', 'Longer trips', p => !abroad(p)], ['long', 'Longer trips · International', abroad]];
+    ['long', 'Longer trips · Domestic', p => !abroad(p)], ['long', 'Longer trips · International', abroad]];
   const body = sections.map(([kind, title, keep], i) => {
     const wins = (s.windows || []).filter(w => w.kind === kind)
       .map(w => ({ w, picks: (w.picks || []).filter(keep) })).filter(x => x.picks.length);
@@ -492,6 +493,8 @@ async function renderTrip() {
   let html;
   try {
     const d = await loadTimes(wid, code);
+    // a flight out at 5pm or later leaves after work: the departure day isn't PTO
+    if (Number(/[ T](\d\d):/.exec(d.outbound[0]?.dep || '')?.[1]) >= 17 && tab === 'trip' && tripKey === key) $('#trip .sub').textContent = dates({ ...w, eve: true }) + (w.holiday ? ' · ' + w.holiday : '');
     html = legsHtml('Outbound', d.outbound) + legsHtml('Return', d.return) +
       `<div class="pad">${d.booking_link ? `<a class="pill small" href="${esc(safeUrl(d.booking_link))}" target="_blank" rel="noopener noreferrer">Book</a>` : ''}</div>`;
   } catch (e) {

@@ -162,7 +162,7 @@ def test_suggestions_doc_shape():
     assert doc["updated"] == "2026-10-17T08:00:00"
     assert [w["id"] for w in doc["windows"]] == [WE.id, w2.id]            # soonest first
     first = doc["windows"][0]
-    assert set(first) == {"id", "kind", "out", "ret", "holiday", "off", "picks"} and doc["windows"][1]["holiday"] == "Veterans Day"
+    assert set(first) == {"id", "kind", "out", "ret", "holiday", "off", "off_eve", "picks"} and doc["windows"][1]["holiday"] == "Veterans Day"
     assert [p["code"] for p in first["picks"]][:2] == ["DEN", "FLL"]      # best first: wish cities lead
     p = next(p for p in first["picks"] if p["code"] == "DEN")
     assert set(p) == {"code", "name", "price", "usual", "minutes", "stops", "hotel", "airline", "airline_code", "wish",
@@ -182,7 +182,7 @@ def test_pick_level_and_per_person_range_from_googles_typical_range():
     rows = [row("DEN", 400, typical=t), row("FLL", 500, name="Miami", typical=t), row("BNA", 700, name="Nashville", typical=t), row("ATL", 700, name="Atlanta")]
     got = {p["code"]: (p["level"], p["range"]) for p in pick.suggestions(rows, {}, {WE.id: WE}, CFG, "t")["windows"][0]["picks"]}
     assert got == {"DEN": ("low", [200, 350]), "FLL": ("typical", [200, 350]), "BNA": ("high", [200, 350]), "ATL": (None, None)}
-    assert pick.suggestions(rows, {}, {WE.id: WE}, CFG, "t")["windows"][0]["off"] == 0   # Fri->Sun
+    assert pick.suggestions(rows, {}, {WE.id: WE}, CFG, "t")["windows"][0]["off"] == 1   # Fri->Sun: Friday counts until the app knows the flight leaves after work
 
 
 def test_suggestions_keep_every_wish_city_and_only_three_others_per_window():
