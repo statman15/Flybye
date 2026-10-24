@@ -106,6 +106,12 @@ class Store:
         for w, rs in by_window.items():
             self._set("latest", w, {"seen": seen, "rows": rs})
 
+    def set_price(self, window_id, code, price):
+        """A fresher price (a watch's daily check) for one city in a window's stored rows; the rest stays as searched."""
+        d = self._get("latest", window_id, None)
+        if d and any(r["code"] == code for r in d["rows"]):
+            self._set("latest", window_id, {**d, "rows": [{**r, "price": price} if r["code"] == code else r for r in d["rows"]]})
+
     def typical(self, tid):
         """Google's typical range for a wish city, trip type and month: {low, high, at}."""
         return self._get("typical", tid, None)

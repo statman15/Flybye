@@ -164,6 +164,7 @@ def watches(cfg, st, today, get, send):
                 send("Flybye watch: " + w["name"], body, {"window_id": w["window_id"], "code": w["code"], "space": st.sid},
                      app_link(st.sid, w["window_id"], w["code"]))
             st.set_watch(id, {"last": p, "low": min(p, w.get("low", p)), "checked": str(today)})
+            st.set_price(w["window_id"], w["code"], row["price"])  # so Trips shows the same price as Watch
         except serp.Fatal:
             raise
         except Exception as e:  # one bad search shouldn't stop the other watches
